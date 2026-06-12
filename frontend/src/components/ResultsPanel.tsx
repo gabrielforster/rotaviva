@@ -53,8 +53,11 @@ export function ResultsPanel({ map, result }: Props) {
           ) : (
             <Row name="Força bruta (ótimo)" value={baselines.brute_force_cost} />
           )}
-          <p className="pt-2 font-medium text-green-600">
-            {improvement.toFixed(1)}% melhor que a rota aleatória
+          <p
+            className={`pt-2 font-medium ${improvement >= 0 ? "text-green-600" : "text-red-600"}`}
+          >
+            {Math.abs(improvement).toFixed(1)}%{" "}
+            {improvement >= 0 ? "melhor" : "pior"} que a rota aleatória
           </p>
         </CardContent>
       </Card>

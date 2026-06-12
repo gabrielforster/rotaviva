@@ -30,6 +30,8 @@ export function MapEditor({ onCancel, onSave }: Props) {
   ]);
   const [matrix, setMatrix] = useState<number[][]>(() => recompute(points));
   const [error, setError] = useState<string | null>(null);
+  // Monotonic counter for new point ids so removing then re-adding never collides.
+  const [nextIdx, setNextIdx] = useState(points.length);
 
   const setPoint = (i: number, patch: Partial<Point>) => {
     const next = points.map((p, idx) => (idx === i ? { ...p, ...patch } : p));
@@ -38,13 +40,14 @@ export function MapEditor({ onCancel, onSave }: Props) {
   };
 
   const addPoint = () => {
-    const letter = String.fromCharCode(97 + points.length);
+    const letter = String.fromCharCode(97 + nextIdx);
     const next: Point[] = [
       ...points,
       { id: letter, label: `Ponto ${letter.toUpperCase()}`, sprite: "pin", x: 150, y: 200 },
     ];
     setPoints(next);
     setMatrix(recompute(next));
+    setNextIdx(nextIdx + 1);
   };
 
   const removePoint = (i: number) => {
@@ -59,6 +62,10 @@ export function MapEditor({ onCancel, onSave }: Props) {
 
   const submit = async () => {
     setError(null);
+    if (!id.trim() || !name.trim()) {
+      setError("ID e Nome são obrigatórios.");
+      return;
+    }
     try {
       await onSave({ id, name, symmetric: true, points, matrix });
     } catch (e) {
@@ -92,7 +99,7 @@ export function MapEditor({ onCancel, onSave }: Props) {
       <div className="space-y-2">
         <p className="text-sm font-medium">Pontos</p>
         {points.map((p, i) => (
-          <div key={i} className="flex items-center gap-2">
+          <div key={p.id} className="flex items-center gap-2">
             <Input
               value={p.label}
               onChange={(e) => setPoint(i, { label: e.target.value })}

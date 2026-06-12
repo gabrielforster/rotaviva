@@ -19,6 +19,9 @@ interface Props {
 }
 
 export function MapCanvas({ map, selected, startId, tour, onToggle }: Props) {
+  if (map.points.length === 0) {
+    return <div className="h-full w-full rounded-lg border bg-card" />;
+  }
   const xs = map.points.map((p) => p.x);
   const ys = map.points.map((p) => p.y);
   const pad = 48;
