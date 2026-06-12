@@ -14,3 +14,9 @@ frontend/dist/
 
 # Editor / OS
 .DS_Store
+
+# brainstorming visual companion (local, ephemeral)
+.superpowers/
+
+# planning/spec working docs (local-only; purged from history later)
+docs/superpowers/
