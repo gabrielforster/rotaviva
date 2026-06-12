@@ -1,10 +1,15 @@
+import math
 import random
-from itertools import permutations
+
+import pytest
 
 from app.routing.hill_climbing import (
-    two_opt_neighbors,
+    hill_climb,
+    local_search,
     random_tour,
+    two_opt_neighbors,
 )
+from app.routing.tour import tour_cost as _tour_cost
 
 
 def test_two_opt_keeps_start_fixed_and_valid_permutations():
@@ -36,10 +41,6 @@ def test_random_tour_fixes_start_and_is_permutation():
     t = random_tour(5, rng)
     assert t[0] == 0
     assert sorted(t) == [0, 1, 2, 3, 4]
-
-
-from app.routing.hill_climbing import local_search
-from app.routing.tour import tour_cost as _tour_cost
 
 
 def test_local_search_returns_local_optimum_no_worse_than_start():
@@ -94,11 +95,6 @@ def test_no_tour_evaluated_twice(monkeypatch):
     assert len(calls) == len(set(calls)), "no identical tour evaluated twice in a run"
 
 
-import math
-
-from app.routing.hill_climbing import hill_climb
-
-
 def _circle_matrix(n: int) -> list[list[float]]:
     pts = [
         (math.cos(2 * math.pi * k / n), math.sin(2 * math.pi * k / n))
@@ -134,7 +130,7 @@ def test_circle_optimum_is_angular_order():
     matrix = _circle_matrix(n)
     _, best_cost, _ = hill_climb(matrix, n, restarts=40, seed=3)
     chord = 2 * math.sin(math.pi / n)
-    assert best_cost == __import__("pytest").approx(n * chord, rel=1e-9)
+    assert best_cost == pytest.approx(n * chord, rel=1e-9)
 
 
 def test_random_restart_never_worse_than_single_climb():
