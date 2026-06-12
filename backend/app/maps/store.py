@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import get_settings
+from app.maps.grid import GridError, parse_grid, validate_points
 
 
 class MapError(Exception):
@@ -38,34 +39,47 @@ _SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 def validate_map(data: dict[str, Any]) -> None:
-    """Structurally validate a map dict; raise ``MapValidationError`` on any problem."""
+    """Structurally validate a grid map dict; raise ``MapValidationError``."""
     map_id = data.get("id")
     if not isinstance(map_id, str) or not _SLUG_RE.match(map_id):
         raise MapValidationError("id must be a lowercase slug (a-z, 0-9, hyphens)")
     name = data.get("name")
     if not isinstance(name, str) or not name.strip():
         raise MapValidationError("name must be a non-empty string")
+    if data.get("style") not in ("city", "warehouse"):
+        raise MapValidationError("style must be 'city' or 'warehouse'")
+
+    grid_data = data.get("grid")
+    if not isinstance(grid_data, dict):
+        raise MapValidationError("grid must be an object with cells and cell_size")
+    try:
+        grid = parse_grid(list(grid_data.get("cells", [])), int(grid_data.get("cell_size", 40)))
+    except (GridError, TypeError, ValueError) as exc:
+        raise MapValidationError(str(exc)) from exc
+
     points = data.get("points")
-    if not isinstance(points, list) or len(points) < 1:
-        raise MapValidationError("points must be a non-empty list")
-    n = len(points)
+    if not isinstance(points, list) or len(points) < 2:
+        raise MapValidationError("points must be a list of at least 2 points")
     seen: set[str] = set()
+    cells: list[tuple[int, int]] = []
     for point in points:
-        pid = point.get("id") if isinstance(point, dict) else None
+        if not isinstance(point, dict):
+            raise MapValidationError("each point must be an object")
+        pid = point.get("id")
         if not isinstance(pid, str) or not pid:
             raise MapValidationError("each point needs a non-empty string id")
         if pid in seen:
             raise MapValidationError(f"duplicate point id: {pid}")
         seen.add(pid)
-    matrix = data.get("matrix")
-    if not isinstance(matrix, list) or len(matrix) != n:
-        raise MapValidationError(f"matrix must have {n} rows (one per point)")
-    for row in matrix:
-        if not isinstance(row, list) or len(row) != n:
-            raise MapValidationError(f"matrix must be square ({n}x{n})")
-        for value in row:
-            if not isinstance(value, (int, float)) or isinstance(value, bool):
-                raise MapValidationError("matrix entries must be numbers")
+        cell = point.get("cell")
+        if not isinstance(cell, dict) or not isinstance(cell.get("row"), int) or not isinstance(cell.get("col"), int):
+            raise MapValidationError(f"point {pid} needs an integer cell {{row, col}}")
+        cells.append((cell["row"], cell["col"]))
+
+    try:
+        validate_points(grid, cells)
+    except GridError as exc:
+        raise MapValidationError(str(exc)) from exc
 
 
 def _read_json(path: Path) -> dict[str, Any]:
