@@ -1,0 +1,339 @@
+# RotaViva
+
+**Sistema Inteligente de Otimização de Rotas** — a self-contained web app that finds the best
+**round-trip route** (a Traveling Salesman tour) over an abstract, in-app map of points, using a
+**goal-based agent** running **Hill Climbing with Random Restart**. It then visualizes the route
+and benchmarks the agent against a random baseline and an exact brute-force optimum.
+
+There is **no real map, geocoding, or external routing API** — maps are in-app data (points with
+coordinates for rendering + an explicit distance matrix), so the focus stays on the AI/optimization
+logic.
+
+> v0.1 — a modern web rebuild of the original RotaViva concept (a ~200-line Python/NetworkX/Matplotlib
+> script), preserving the AI intent: local search over a city graph, measured against baselines.
+
+![Optimized route, three-way comparison, and convergence chart](docs/screenshots/02-optimized-route.png)
+
+---
+
+## Table of contents
+
+- [What it does](#what-it-does)
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [How it works (the algorithm)](#how-it-works-the-algorithm)
+- [Architecture](#architecture)
+- [Project structure](#project-structure)
+- [Getting started](#getting-started)
+- [Configuration](#configuration)
+- [API reference](#api-reference)
+- [Module reference](#module-reference)
+- [Testing](#testing)
+- [Roadmap (v0.2)](#roadmap-v02)
+
+---
+
+## What it does
+
+1. You pick a **map** — a bundled preset, one you registered yourself, or a randomly generated one.
+2. You click points on the graph to choose a **subset of stops** and designate a **start**.
+3. The backend builds the distance sub-matrix for those stops and runs the **agent**:
+   Hill Climbing over a **2-opt** neighborhood, with **Random Restart** to escape local optima,
+   and a **memory of visited states** so no tour is evaluated twice in a run.
+4. The frontend draws the resulting **closed round-trip** on the map and shows:
+   - the **route sequence** and its **total cost**,
+   - a **three-way comparison**: agent vs. a random route vs. the **brute-force optimum**
+     (computed only for small instances, `N < 10`),
+   - a **convergence chart** of best-cost-per-restart.
+
+RotaViva solves the **Traveling Salesman Problem (TSP)** — visiting every chosen stop exactly once
+and returning to the start at minimum total distance. TSP is NP-hard, so for anything but tiny
+instances an exact search is intractable; the agent trades guaranteed optimality for a good solution
+in a fraction of the time, and the UI lets you *see* how close it gets.
+
+## Features
+
+- **Abstract maps** with sprite-rendered points and an explicit (symmetric or asymmetric) distance matrix.
+- **Goal-based agent**: Hill Climbing + Random Restart over a 2-opt neighborhood, deterministic under a seed.
+- **Visited-state memory** ("memória de estados") — identical tours are never re-evaluated within a run.
+- **Three-way benchmark**: agent route vs. random route vs. exact brute force (guarded to `N < 10`).
+- **Convergence chart** — best cost per restart, so you can watch the search improve.
+- **Three map sources**: bundled **presets**, **user-registered** maps, and **auto-generated**
+  random maps (N points → Euclidean matrix).
+- **Built-in map editor** — add points, choose sprites, and edit the distance matrix (Euclidean by default).
+- Clean separation: a **pure, fully unit-tested** algorithm core (49 backend tests) behind a thin HTTP API.
+
+## Screenshots
+
+### Map view — the abstract graph
+A preset map rendered as sprite nodes at their coordinates. Click any node to add it as a stop.
+
+![A preset map rendered as sprite nodes](docs/screenshots/01-map-view.png)
+
+### Optimized round-trip + benchmark
+The agent's closed route drawn in green, with the route sequence, total cost, the
+agent-vs-random-vs-brute-force comparison, and the convergence chart.
+
+![Optimized route with comparison and convergence chart](docs/screenshots/02-optimized-route.png)
+
+### Generated map — where brute force gives up
+An auto-generated 11-point map. With 11 stops, exact brute force is skipped ("ignorada"), but the
+agent still finds a route ~50% better than a random one — the core value of the heuristic.
+
+![A generated 11-point map optimized by the agent](docs/screenshots/03-generated-map.png)
+
+### Map editor — register your own
+Add points with sprites and coordinates; the distance matrix auto-fills with Euclidean distances and
+stays fully editable (including asymmetric values).
+
+![The map editor](docs/screenshots/04-map-editor.png)
+
+---
+
+## How it works (the algorithm)
+
+The optimization core lives in `backend/app/routing/` and is **pure** (no I/O) and **deterministic**
+under a provided `seed`. It operates only on integer-indexed distance matrices — the HTTP layer maps
+point ids ↔ matrix indices.
+
+### Tour & cost
+A **tour** is a list of stop indices forming a closed cycle, with the start fixed at position `0`.
+The **cost** is the sum of the directed edges around the loop, *including* the closing edge back to
+the start:
+
+```
+cost(tour) = Σ  matrix[tour[i]][tour[(i+1) mod n]]
+```
+
+Using directed edges and the modulo wrap means the same function works for **symmetric and asymmetric**
+matrices and degenerate cases (1 or 2 stops).
+
+### 2-opt neighborhood
+A neighbor of a tour is produced by a **2-opt move**: reverse the contiguous segment between two
+positions `i` and `j` (`1 ≤ i < j < n`). Position `0` is never moved, so the start stays fixed and
+every neighbor is a valid permutation. This yields `(n-1)(n-2)/2` neighbors per tour.
+
+### Local search (best-improving)
+From a starting tour, evaluate all neighbors and move to the **strictly best-improving** one; repeat
+until no neighbor improves (a **local optimum**). Cost strictly decreases on every accepted move, so
+the search always terminates.
+
+### Random Restart
+A single hill climb gets stuck at the first local optimum it reaches. **Random Restart** runs local
+search from several **seeded random** initial tours and keeps the best result across all of them —
+dramatically improving solution quality on multi-optimum instances.
+
+### Visited-state memory
+A run-wide `set` of canonical tour keys records every tour already evaluated. Neighbors whose key was
+already seen are skipped, so **no identical tour is ever evaluated twice within a run** — this is the
+concept doc's "memória de estados", shared across all restarts.
+
+### Convergence history
+After each restart the **best-cost-so-far** is appended to a `history` list — a non-increasing curve
+that the frontend renders as the convergence chart.
+
+### Baselines (for benchmarking)
+- **Random route cost** — the cost of one random valid tour (seeded): the "no intelligence" baseline.
+- **Brute-force optimal** — the exact minimum over all permutations, **guarded** to `N < BRUTE_FORCE_GUARD`
+  (default `10`). Above the guard it is skipped and the response flags `brute_force_skipped: true`.
+
+### From ids to a sub-matrix (the API glue)
+On `POST /optimize` the route layer:
+1. loads the full map and maps each point id → its matrix index,
+2. orders the chosen stops as `[start] + others` and builds the `N×N` sub-matrix over those indices,
+3. runs `hill_climb` (start fixed at index `0`), computes both baselines,
+4. maps the resulting index tour back to point ids and appends the start to close the loop.
+
+## Architecture
+
+Two independently runnable deployables that talk over HTTP/JSON:
+
+```
+┌────────────────────────┐        HTTP / JSON         ┌─────────────────────────────┐
+│  Frontend (Vite+React)  │ ─────────────────────────▶ │  Backend (FastAPI)           │
+│  • map picker / editor   │   GET/POST /maps, /optimize │  • api/   thin HTTP layer    │
+│  • SVG canvas + route    │ ◀───────────────────────── │  • routing/ pure TSP core ★  │
+│  • Recharts convergence  │     route, cost, history,   │  • maps/  JSON store + gen   │
+│  • results & comparison  │     baselines               │  • config settings           │
+└────────────────────────┘                            └─────────────────────────────┘
+                                                          ★ no I/O, deterministic, unit-tested
+```
+
+- `routing/` (the algorithm) never imports `maps/` or `api/`.
+- `maps/store.py` is the **only** module that touches the filesystem.
+- `api/` does validation, id↔index mapping, and exception→HTTP translation — no business logic.
+
+## Project structure
+
+```
+rotaviva/
+├── backend/
+│   ├── app/
+│   │   ├── config.py              # env-driven settings (guards, defaults, dirs)
+│   │   ├── main.py                # FastAPI app factory + CORS
+│   │   ├── api/
+│   │   │   ├── schemas.py         # Pydantic request/response models
+│   │   │   └── routes.py          # 6 endpoints; id↔index mapping; error mapping
+│   │   ├── routing/               # PURE core — no I/O, deterministic, unit-tested
+│   │   │   ├── tour.py            # Tour type + tour_cost()
+│   │   │   ├── hill_climbing.py   # 2-opt, local search, random restart, memory, history
+│   │   │   └── baselines.py       # random + guarded brute-force baselines
+│   │   └── maps/
+│   │       ├── store.py           # JSON store: presets (read-only) + user CRUD
+│   │       ├── generate.py        # random N points → Euclidean matrix (NumPy)
+│   │       └── presets/*.json     # bundled maps (triangulo, cidade-exemplo)
+│   ├── tests/                     # 49 pytest tests over the core, store, and API
+│   └── pyproject.toml             # uv project
+├── frontend/
+│   ├── src/
+│   │   ├── types.ts               # shared TS types (mirror Pydantic schemas)
+│   │   ├── lib/api.ts             # typed fetch wrappers
+│   │   ├── components/
+│   │   │   ├── MapCanvas.tsx       # SVG: sprite nodes, click-to-select, route polyline
+│   │   │   ├── StopList.tsx        # selected stops, designate start, remove
+│   │   │   ├── MapPicker.tsx       # choose / generate / open-editor
+│   │   │   ├── MapEditor.tsx       # register a map (points + editable matrix)
+│   │   │   ├── ResultsPanel.tsx    # route, cost, three-way comparison
+│   │   │   ├── ConvergenceChart.tsx# Recharts cost-per-restart
+│   │   │   └── ui/                 # shadcn/ui primitives
+│   │   └── App.tsx                # state owner + layout
+│   └── package.json               # pnpm project (Vite + React + Tailwind v4)
+├── docs/
+│   ├── screenshots/               # the images used in this README
+│   └── superpowers/plans/         # the implementation plans this was built from
+└── README.md
+```
+
+## Getting started
+
+### Prerequisites
+- **Python 3.11+** and [**uv**](https://docs.astral.sh/uv/) (env + dependency manager)
+- **Node 20+** and [**pnpm**](https://pnpm.io/)
+
+### 1. Backend (FastAPI, port 8000)
+
+```bash
+cd backend
+uv sync                                              # create venv + install deps
+uv run uvicorn app.main:app --reload --port 8000     # start the API
+```
+
+- Interactive API docs: <http://localhost:8000/docs>
+- Run the test suite: `uv run pytest`
+
+### 2. Frontend (Vite + React, port 5173)
+
+```bash
+cd frontend
+pnpm install
+pnpm dev                                             # http://localhost:5173
+```
+
+Open <http://localhost:5173>, pick **Cidade Exemplo**, click a few points, set a start, and hit
+**Otimizar rota**. Production build: `pnpm build` (outputs to `frontend/dist`).
+
+> The frontend calls the backend at `http://localhost:8000` by default — start the backend first.
+> The backend's CORS is preconfigured for the Vite dev server origin.
+
+> **Troubleshooting:** if `node`/`pnpm` aren't found via a version manager (e.g. a broken asdf shim),
+> point your shell at a concrete Node install, e.g.
+> `export PATH="$HOME/.asdf/installs/nodejs/22.12.0/bin:$PATH"`.
+
+## Configuration
+
+### Backend (environment variables, prefix `ROTAVIVA_`)
+| Variable | Default | Meaning |
+|---|---|---|
+| `ROTAVIVA_PRESETS_DIR` | `app/maps/presets` | Read-only bundled maps |
+| `ROTAVIVA_DATA_DIR` | `backend/data/maps` | Where user-registered maps are written (gitignored) |
+| `ROTAVIVA_BRUTE_FORCE_GUARD` | `10` | Brute force is skipped when `N ≥ this` |
+| `ROTAVIVA_DEFAULT_RESTARTS` | `20` | Random-restart count when the request omits it |
+
+### Frontend
+| Variable | Default | Meaning |
+|---|---|---|
+| `VITE_API_URL` | `http://localhost:8000` | Backend base URL |
+
+## API reference
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET`  | `/maps` | List all maps (presets + user), summary form |
+| `GET`  | `/maps/{id}` | Full map (points + matrix) |
+| `POST` | `/maps` | Register a new user map (validated, persisted) → `201` |
+| `DELETE` | `/maps/{id}` | Delete a user map (presets are read-only) → `204` |
+| `POST` | `/maps/generate` | Generate a random map (N points → Euclidean); optionally save |
+| `POST` | `/optimize` | Run the agent + baselines for a map/subset |
+
+**Example — optimize a route:**
+
+```bash
+curl -s -X POST http://localhost:8000/optimize \
+  -H 'content-type: application/json' \
+  -d '{"map_id":"cidade-exemplo","stop_ids":["a","b","c","d","e"],"start_id":"a","seed":5}'
+```
+
+```jsonc
+{
+  "tour": ["a", "b", "c", "d", "e", "a"],   // ordered ids, closed loop
+  "total_cost": 53.0,
+  "history": [53.0, 53.0, ...],             // best cost per restart
+  "baselines": { "random_cost": 71.0, "brute_force_cost": 53.0 },
+  "brute_force_skipped": false
+}
+```
+
+**Error semantics:** non-square matrix or size ≠ point count → `422`; `start_id` not in `stop_ids`
+or fewer than 2 stops → `422`; id/name collision on register → `409`; deleting a preset → `403`;
+unknown map → `404`. Brute force above the guard is **not** an error — it's skipped with
+`brute_force_skipped: true`.
+
+## Module reference
+
+### Backend
+
+| Module | Responsibility | Key surface |
+|---|---|---|
+| `app/routing/tour.py` | Tour representation + cost of a closed cycle | `tour_cost(matrix, tour)` |
+| `app/routing/hill_climbing.py` | The agent: neighborhood, local search, restarts, memory, history | `two_opt_neighbors`, `random_tour`, `local_search`, `hill_climb` |
+| `app/routing/baselines.py` | Benchmark baselines | `random_route_cost`, `brute_force_optimal` |
+| `app/maps/store.py` | The only filesystem module: load presets (read-only) + user CRUD; structural validation | `validate_map`, `list_maps`, `get_map`, `create_map`, `delete_map`, `MapError`+subclasses |
+| `app/maps/generate.py` | Random N points → rounded Euclidean matrix (NumPy), seeded | `generate_map(map_id, name, n, *, seed=...)` |
+| `app/api/schemas.py` | Pydantic request/response models (mirror `frontend/src/types.ts`) | `MapModel`, `OptimizeRequest`, `OptimizeResponse`, … |
+| `app/api/routes.py` | Thin HTTP layer: validation, id↔index mapping, store-exception → HTTP code | the 6 endpoints |
+| `app/config.py` | Env-driven settings (no caching, so tests can redirect dirs) | `Settings`, `get_settings()` |
+
+### Frontend
+
+| Module | Responsibility |
+|---|---|
+| `src/App.tsx` | Owns all state (maps, selected map, stops, start, result) and the layout; wires every component and the API |
+| `src/lib/api.ts` | Typed `fetch` wrappers for the six endpoints; extracts FastAPI error `detail` |
+| `src/types.ts` | Shared TypeScript types mirroring the backend Pydantic schemas |
+| `src/components/MapCanvas.tsx` | SVG canvas: sprite (emoji) nodes positioned by `(x, y)`, click-to-toggle stops, start/selection highlighting, and the route polyline |
+| `src/components/StopList.tsx` | Lists selected stops, radio to designate the start, remove button |
+| `src/components/MapPicker.tsx` | Dropdown of maps, delete (non-presets), random-map generator form, open-editor button |
+| `src/components/MapEditor.tsx` | Register a map: add/remove points, choose sprites, auto-Euclidean + editable distance matrix |
+| `src/components/ResultsPanel.tsx` | Route sequence, total cost, agent/random/brute-force comparison, improvement % |
+| `src/components/ConvergenceChart.tsx` | Recharts step line of best-cost-per-restart |
+
+## Testing
+
+The pure `routing/` core is exhaustively unit-tested (deterministic via seed), plus the store and the
+HTTP API:
+
+```bash
+cd backend && uv run pytest        # 49 tests
+```
+
+Coverage highlights: cost correctness (symmetric + asymmetric), 2-opt validity, local-search
+monotonicity, the circle instance whose optimum is the angular order, determinism under a seed,
+visited-state memory (no tour evaluated twice), brute force matching the known optimum + the guard
+refusing large N, edge cases (1/2/3 stops), the full map-store CRUD + validation, and every endpoint
+through FastAPI's `TestClient`. The frontend is exercised manually for v0.1.
+
+## Roadmap (v0.2)
+
+Deferred from the v0.1 concept doc: **Simulated Annealing** as an alternative heuristic, a **Naive
+Bayes** congestion model to adjust edge costs, real-map visual input, **multi-agent fleets** with
+route division, and cross-run persistent learning.
