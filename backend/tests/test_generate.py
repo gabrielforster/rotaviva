@@ -1,32 +1,40 @@
-import math
-
 import pytest
 
-from app.maps.generate import generate_map
-from app.maps.store import validate_map
+from app.maps.generate import SIZES, generate_map
+from app.maps.grid import matrix_for_map, parse_grid, validate_points
 
 
-def test_generate_shape_and_validity():
-    m = generate_map("gen-x", "Gerado X", n=5, seed=1)
-    assert m["id"] == "gen-x"
-    assert m["name"] == "Gerado X"
+@pytest.mark.parametrize("style", ["city", "warehouse"])
+def test_generate_produces_valid_connected_map(style):
+    m = generate_map("g1", "G1", 6, style=style, size="medium", density=0.6, seed=7)
+    assert m["style"] == style
     assert m["source"] == "generated"
-    assert len(m["points"]) == 5
-    assert len(m["matrix"]) == 5 and all(len(row) == 5 for row in m["matrix"])
-    # A generated map must pass the store's structural validation.
-    validate_map(m)
+    assert "matrix" not in m
+    grid = parse_grid(list(m["grid"]["cells"]), m["grid"]["cell_size"])
+    cells = [(p["cell"]["row"], p["cell"]["col"]) for p in m["points"]]
+    validate_points(grid, cells)  # in-bounds, free, distinct, connected -> no raise
 
 
-def test_generate_is_deterministic_for_a_seed():
-    assert generate_map("g", "G", n=6, seed=42) == generate_map("g", "G", n=6, seed=42)
+@pytest.mark.parametrize("style", ["city", "warehouse"])
+def test_generate_is_deterministic_for_seed(style):
+    a = generate_map("g", "G", 5, style=style, seed=42)
+    b = generate_map("g", "G", 5, style=style, seed=42)
+    assert a == b
 
 
-def test_generated_matrix_is_euclidean_and_symmetric():
-    m = generate_map("g", "G", n=4, seed=7)
-    pts = [(p["x"], p["y"]) for p in m["points"]]
-    for i in range(4):
-        for j in range(4):
-            expected = round(math.dist(pts[i], pts[j]), 2)
-            assert m["matrix"][i][j] == pytest.approx(expected)
-            assert m["matrix"][i][j] == pytest.approx(m["matrix"][j][i])
-    assert m["matrix"][0][0] == 0
+def test_generate_places_exactly_n_points():
+    m = generate_map("g", "G", 4, style="city", size="small", seed=1)
+    assert len(m["points"]) == 4
+    ids = [p["id"] for p in m["points"]]
+    assert len(set(ids)) == 4
+
+
+def test_generate_unknown_style_raises():
+    with pytest.raises(ValueError):
+        generate_map("g", "G", 3, style="village", seed=1)
+
+
+def test_generated_matrix_is_derivable():
+    m = generate_map("g", "G", 5, style="warehouse", seed=3)
+    matrix = matrix_for_map(m)
+    assert len(matrix) == 5 and matrix[0][0] == 0

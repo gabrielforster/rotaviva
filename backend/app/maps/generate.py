@@ -1,16 +1,56 @@
-"""Random map generation: N points in a plane with a Euclidean distance matrix."""
+"""Procedural grid map generation: city blocks or warehouse racks.
+
+Deterministic for a fixed seed. Always yields a single connected street/aisle
+network with exactly ``n`` points on free cells (subject to available space).
+"""
 from __future__ import annotations
 
 import random
 from typing import Any
 
-import numpy as np
+_CITY_SPRITES = ["shop", "home", "school", "hospital", "park"]
+_WAREHOUSE_SPRITES = ["pin", "shop", "home"]
 
-_SPRITES = ["shop", "home", "factory", "park", "school", "hospital"]
+# (cols, rows)
+SIZES: dict[str, tuple[int, int]] = {
+    "small": (10, 7),
+    "medium": (13, 9),
+    "large": (19, 13),
+}
 
 
 def _point_id(i: int) -> str:
     return chr(ord("a") + i) if i < 26 else f"p{i}"
+
+
+def _carve_city(cols: int, rows: int, density: float, rng: random.Random) -> list[str]:
+    # Roads on every 3rd row/col form a connected lattice. Every non-road cell is
+    # adjacent to a road, so carving any of them to '.' keeps the map connected.
+    grid: list[str] = []
+    for r in range(rows):
+        row = []
+        for c in range(cols):
+            if r % 3 == 0 or c % 3 == 0:
+                row.append(".")
+            else:
+                row.append("#" if rng.random() < density else ".")
+        grid.append("".join(row))
+    return grid
+
+
+def _carve_warehouse(cols: int, rows: int, density: float, rng: random.Random) -> list[str]:
+    # Vertical racks in odd columns; aisles in even columns + border + cross-aisles.
+    period = 3 if density < 0.4 else (4 if density < 0.7 else 5)
+    grid: list[str] = []
+    for r in range(rows):
+        row = []
+        for c in range(cols):
+            border = r in (0, rows - 1) or c in (0, cols - 1)
+            cross_aisle = r % period == 0
+            aisle_col = c % 2 == 0
+            row.append("." if (border or cross_aisle or aisle_col) else "#")
+        grid.append("".join(row))
+    return grid
 
 
 def generate_map(
@@ -18,40 +58,40 @@ def generate_map(
     name: str,
     n: int,
     *,
-    width: int = 480,
-    height: int = 320,
+    style: str = "city",
+    size: str = "medium",
+    density: float = 0.6,
     seed: int | None = None,
+    cell_size: int = 40,
 ) -> dict[str, Any]:
-    """Build a map of ``n`` random points with a rounded Euclidean distance matrix.
-
-    Deterministic for a fixed ``seed``. Coordinates fall within the SVG canvas
-    bounds (with a 20px margin) so the frontend can render them directly.
-    """
+    if style not in ("city", "warehouse"):
+        raise ValueError(f"unknown style: {style}")
+    cols, rows = SIZES.get(size, SIZES["medium"])
     rng = random.Random(seed)
+    cells = (
+        _carve_city(cols, rows, density, rng)
+        if style == "city"
+        else _carve_warehouse(cols, rows, density, rng)
+    )
+    free = [(r, c) for r in range(rows) for c in range(cols) if cells[r][c] == "."]
+    n = min(n, len(free))
+    chosen = rng.sample(free, n)
+    sprites = _CITY_SPRITES if style == "city" else _WAREHOUSE_SPRITES
     points: list[dict[str, Any]] = []
-    coords: list[tuple[int, int]] = []
-    for i in range(n):
-        x = rng.randint(20, width - 20)
-        y = rng.randint(20, height - 20)
-        coords.append((x, y))
+    for i, (r, c) in enumerate(chosen):
         points.append(
             {
                 "id": _point_id(i),
-                "label": f"Ponto {i + 1}",
-                "sprite": _SPRITES[i % len(_SPRITES)],
-                "x": x,
-                "y": y,
+                "label": "Depósito" if i == 0 else f"Parada {i}",
+                "sprite": "factory" if i == 0 else sprites[i % len(sprites)],
+                "cell": {"row": r, "col": c},
             }
         )
-    pts = np.array(coords, dtype=float)
-    diff = pts[:, None, :] - pts[None, :, :]
-    dist = np.sqrt((diff**2).sum(axis=2))
-    matrix = np.round(dist, 2).tolist()
     return {
         "id": map_id,
         "name": name,
         "source": "generated",
-        "symmetric": True,
+        "style": style,
+        "grid": {"cell_size": cell_size, "cells": cells},
         "points": points,
-        "matrix": matrix,
     }
