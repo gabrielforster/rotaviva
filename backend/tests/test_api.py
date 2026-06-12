@@ -152,3 +152,26 @@ def test_generate_with_save_is_persisted(temp_store):
     r = client.post("/maps/generate", json={"n": 4, "seed": 2, "save": True, "id": "g4", "name": "G4"})
     assert r.status_code == 200
     assert any(s["id"] == "g4" for s in client.get("/maps").json())
+
+
+def test_real_presets_are_listed_and_optimizable():
+    # No temp_store fixture here: use the real bundled presets dir.
+    client = TestClient(create_app())
+    ids = {s["id"] for s in client.get("/maps").json()}
+    assert {"triangulo", "cidade-exemplo"} <= ids
+    r = client.post(
+        "/optimize",
+        json={
+            "map_id": "cidade-exemplo",
+            "stop_ids": ["a", "b", "c", "d", "e"],
+            "start_id": "a",
+            "restarts": 30,
+            "seed": 5,
+        },
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["tour"][0] == "a" and data["tour"][-1] == "a"
+    # N=5 < guard -> brute force present, and the agent must match the optimum.
+    assert data["brute_force_skipped"] is False
+    assert data["total_cost"] == data["baselines"]["brute_force_cost"]
