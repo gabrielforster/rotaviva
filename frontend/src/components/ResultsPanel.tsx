@@ -1,0 +1,72 @@
+import type { MapModel, OptimizeResponse } from "@/types";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ConvergenceChart } from "./ConvergenceChart";
+
+interface Props {
+  map: MapModel;
+  result: OptimizeResponse;
+}
+
+function Row({ name, value }: { name: string; value: number }) {
+  return (
+    <div className="flex justify-between">
+      <span>{name}</span>
+      <span className="font-mono">{value.toFixed(2)}</span>
+    </div>
+  );
+}
+
+export function ResultsPanel({ map, result }: Props) {
+  const labelOf = (id: string) =>
+    map.points.find((p) => p.id === id)?.label ?? id;
+  const { baselines } = result;
+  const improvement =
+    baselines.random_cost > 0
+      ? (1 - result.total_cost / baselines.random_cost) * 100
+      : 0;
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Rota otimizada</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-sm">{result.tour.map(labelOf).join(" → ")}</p>
+          <p className="text-2xl font-semibold">
+            Custo total: {result.total_cost.toFixed(2)}
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Comparação</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1 text-sm">
+          <Row name="Agente (Hill Climbing)" value={result.total_cost} />
+          <Row name="Rota aleatória" value={baselines.random_cost} />
+          {result.brute_force_skipped || baselines.brute_force_cost === null ? (
+            <p className="text-muted-foreground">
+              Força bruta: ignorada (muitas paradas)
+            </p>
+          ) : (
+            <Row name="Força bruta (ótimo)" value={baselines.brute_force_cost} />
+          )}
+          <p className="pt-2 font-medium text-green-600">
+            {improvement.toFixed(1)}% melhor que a rota aleatória
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Convergência</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ConvergenceChart history={result.history} />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
