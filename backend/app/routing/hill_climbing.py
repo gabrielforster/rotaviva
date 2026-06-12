@@ -60,3 +60,29 @@ def local_search(
             return current, current_cost
         current = best_neighbor
         current_cost = best_cost
+
+
+def hill_climb(
+    matrix: Matrix, n: int, restarts: int, seed: int | None = None
+) -> tuple[Tour, float, list[float]]:
+    """Run Random-Restart Hill Climbing; return ``(best_tour, best_cost, history)``.
+
+    ``n`` is the number of stops (``matrix`` is ``n x n``). Each restart begins
+    from a fresh seeded random tour and runs ``local_search``; the run-wide
+    ``visited`` set is shared across restarts so identical tours are never
+    re-evaluated. ``history[k]`` is the best cost found through the end of
+    restart ``k`` — a non-increasing convergence curve for the chart.
+    Deterministic for a fixed ``seed``.
+    """
+    rng = random.Random(seed)
+    visited: set[tuple[int, ...]] = set()
+    best_tour: Tour = list(range(n))
+    best_cost = float("inf")
+    history: list[float] = []
+    for _ in range(max(1, restarts)):
+        candidate, cost = local_search(matrix, random_tour(n, rng), visited)
+        if cost < best_cost:
+            best_cost = cost
+            best_tour = candidate
+        history.append(best_cost)
+    return best_tour, best_cost, history

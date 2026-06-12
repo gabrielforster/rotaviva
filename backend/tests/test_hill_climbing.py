@@ -92,3 +92,59 @@ def test_no_tour_evaluated_twice(monkeypatch):
     visited: set[tuple[int, ...]] = set()
     hc.local_search(matrix, [0, 1, 2, 3], visited)
     assert len(calls) == len(set(calls)), "no identical tour evaluated twice in a run"
+
+
+import math
+
+from app.routing.hill_climbing import hill_climb
+
+
+def _circle_matrix(n: int) -> list[list[float]]:
+    pts = [
+        (math.cos(2 * math.pi * k / n), math.sin(2 * math.pi * k / n))
+        for k in range(n)
+    ]
+    return [
+        [math.dist(pts[i], pts[j]) for j in range(n)]
+        for i in range(n)
+    ]
+
+
+def test_determinism_same_seed_same_result():
+    matrix = _circle_matrix(6)
+    a = hill_climb(matrix, 6, restarts=10, seed=7)
+    b = hill_climb(matrix, 6, restarts=10, seed=7)
+    assert a == b
+
+
+def test_history_is_non_increasing_and_length_matches_restarts():
+    matrix = _circle_matrix(7)
+    _, best_cost, history = hill_climb(matrix, 7, restarts=8, seed=1)
+    assert len(history) == 8
+    assert history == sorted(history, reverse=True) or all(
+        history[i] >= history[i + 1] for i in range(len(history) - 1)
+    )
+    assert history[-1] == best_cost
+
+
+def test_circle_optimum_is_angular_order():
+    # On points evenly spaced on a circle the optimal tour is the boundary
+    # polygon: each of n edges has the same chord length.
+    n = 8
+    matrix = _circle_matrix(n)
+    _, best_cost, _ = hill_climb(matrix, n, restarts=40, seed=3)
+    chord = 2 * math.sin(math.pi / n)
+    assert best_cost == __import__("pytest").approx(n * chord, rel=1e-9)
+
+
+def test_random_restart_never_worse_than_single_climb():
+    matrix = _circle_matrix(7)
+    _, one, _ = hill_climb(matrix, 7, restarts=1, seed=42)
+    _, many, _ = hill_climb(matrix, 7, restarts=25, seed=42)
+    # Restart 1 of the many-run is identical to the single run, so many <= one.
+    assert many <= one
+
+
+def test_handles_one_and_two_stops():
+    assert hill_climb([[0]], 1, restarts=3, seed=0)[1] == 0
+    assert hill_climb([[0, 7], [7, 0]], 2, restarts=3, seed=0)[1] == 14
