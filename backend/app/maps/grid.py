@@ -64,3 +64,59 @@ def cell_center(grid: Grid, cell: Cell) -> tuple[float, float]:
     r, c = cell
     s = grid.cell_size
     return (c * s + s / 2, r * s + s / 2)
+
+
+def bfs_distances(grid: Grid, start: Cell) -> dict[Cell, int]:
+    """Step-count distance from ``start`` to every reachable free cell."""
+    if not grid.is_free(start):
+        raise GridError(f"start cell {start} is not free")
+    dist: dict[Cell, int] = {start: 0}
+    queue: deque[Cell] = deque([start])
+    while queue:
+        cur = queue.popleft()
+        for nxt in neighbors(grid, cur):
+            if nxt not in dist:
+                dist[nxt] = dist[cur] + 1
+                queue.append(nxt)
+    return dist
+
+
+def derive_matrix(grid: Grid, cells: list[Cell]) -> list[list[int]]:
+    """Full symmetric step-count matrix between point cells.
+
+    Raises ``GridError`` if any pair is mutually unreachable.
+    """
+    n = len(cells)
+    matrix = [[0] * n for _ in range(n)]
+    for i, src in enumerate(cells):
+        dist = bfs_distances(grid, src)
+        for j, dst in enumerate(cells):
+            if dst not in dist:
+                raise GridError(f"points {i} and {j} are not connected by streets")
+            matrix[i][j] = dist[dst]
+    return matrix
+
+
+def validate_points(grid: Grid, cells: list[Cell]) -> None:
+    """Each cell in-bounds, free, distinct, and all mutually reachable."""
+    seen: set[Cell] = set()
+    for cell in cells:
+        if not grid.in_bounds(cell):
+            raise GridError(f"point cell {cell} is out of bounds")
+        if not grid.is_free(cell):
+            raise GridError(f"point cell {cell} is on a blocked cell")
+        if cell in seen:
+            raise GridError(f"duplicate point cell {cell}")
+        seen.add(cell)
+    if cells:
+        reach = bfs_distances(grid, cells[0])
+        for cell in cells[1:]:
+            if cell not in reach:
+                raise GridError("all points must be connected by streets")
+
+
+def matrix_for_map(data: dict) -> list[list[int]]:
+    """Build the distance matrix for a stored/generated map dict."""
+    grid = parse_grid(list(data["grid"]["cells"]), int(data["grid"].get("cell_size", 40)))
+    cells = [(p["cell"]["row"], p["cell"]["col"]) for p in data["points"]]
+    return derive_matrix(grid, cells)
