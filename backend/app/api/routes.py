@@ -28,8 +28,9 @@ def list_maps() -> list[dict]:
     return store.list_maps()
 
 
-# NOTE: /maps/generate must be declared before /maps/{map_id} so that FastAPI
-# does not treat the literal string "generate" as a map_id path parameter.
+# Static "/maps/generate" is declared before the parameterized "/maps/{map_id}"
+# as a tidy convention. (They use different methods — POST vs GET — so order does
+# not actually affect matching here.)
 @router.post("/maps/generate", response_model=MapModel)
 def generate_map(req: GenerateRequest) -> dict:
     map_id = req.id or f"gerado-{req.n}-{req.seed if req.seed is not None else 'rnd'}"
@@ -38,10 +39,12 @@ def generate_map(req: GenerateRequest) -> dict:
     if req.save:
         try:
             return store.create_map(data)
-        except store.MapConflict as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except store.MapValidationError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except store.MapConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except store.MapError as exc:  # IO failure
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
     return data
 
 
