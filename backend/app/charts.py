@@ -84,8 +84,10 @@ def evolution_png(full_history, restart_indices, best_cost) -> bytes:
     for i, pt in enumerate(restart_indices):
         ax.axvline(x=pt, color="red", linestyle="--", alpha=0.5,
                    label="Random Restart" if i == 0 else None)
-    idx_min = full_history.index(best_cost)
-    ax.plot(idx_min, best_cost, marker="o", color="green", markersize=8,
+    # Locate the minimum by argmin rather than ``index(best_cost)`` so a
+    # re-derived/rounded ``best_cost`` can never raise ValueError.
+    idx_min = min(range(len(full_history)), key=lambda i: full_history[i])
+    ax.plot(idx_min, full_history[idx_min], marker="o", color="green", markersize=8,
             label="Menor Custo Absoluto")
     spread = (max(full_history) - min(full_history)) or 1.0
     ax.annotate(
