@@ -60,6 +60,7 @@ in a fraction of the time, and the UI lets you *see* how close it gets.
 - **Visited-state memory** ("memória de estados") — identical tours are never re-evaluated within a run.
 - **Three-way benchmark**: agent route vs. random route vs. exact brute force (guarded to `N < 10`).
 - **Convergence chart** — best cost per restart, so you can watch the search improve.
+- **Street-following route** drawn on the grid, with `>` direction arrows along the path so the travel order is easy to read.
 - **Three map sources**: bundled **presets** (one city, one warehouse), **user-painted** maps, and
   **auto-generated** city/warehouse grids (style + size + density + seed).
 - **Built-in grid painter** — paint buildings/shelves, drop points on free cells, pick a style; the
@@ -329,7 +330,7 @@ above the guard is **not** an error — it's skipped with `brute_force_skipped: 
 | `src/lib/api.ts` | Typed `fetch` wrappers for the six endpoints; extracts FastAPI error `detail` |
 | `src/lib/grid.ts` | Pure helpers mirroring the backend grid contract: `cellCenter`, `isFree`, `bfsPath` (shortest cell path used to draw route legs) |
 | `src/types.ts` | Shared TypeScript types mirroring the backend Pydantic schemas (`Cell`, `GridModel`, `style`) |
-| `src/components/MapCanvas.tsx` | SVG canvas: themed grid (city blocks / warehouse racks), sprite points at cell centers, click-to-toggle stops, and the street-following route polyline traced via BFS |
+| `src/components/MapCanvas.tsx` | SVG canvas: themed grid (city blocks / warehouse racks), sprite points at cell centers, click-to-toggle stops, and the street-following route polyline traced via BFS, overlaid with `>` direction chevrons |
 | `src/components/StopList.tsx` | Lists selected stops, radio to designate the start, remove button |
 | `src/components/MapPicker.tsx` | Dropdown of maps, delete (non-presets), grid generator (style·size·density·n·seed), open-painter button |
 | `src/components/GridPainter.tsx` | Paint buildings/shelves, drop points on free cells, pick a style; validates connectivity and posts a grid map (matrix derived server-side) |
