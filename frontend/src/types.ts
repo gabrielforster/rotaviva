@@ -1,20 +1,31 @@
 export type MapSource = "preset" | "user" | "generated";
+export type MapStyle = "city" | "warehouse";
+export type MapSize = "small" | "medium" | "large";
+
+export interface Cell {
+  row: number;
+  col: number;
+}
 
 export interface Point {
   id: string;
   label: string;
   sprite: string;
-  x: number;
-  y: number;
+  cell: Cell;
+}
+
+export interface GridModel {
+  cell_size: number;
+  cells: string[];
 }
 
 export interface MapModel {
   id: string;
   name: string;
   source: MapSource;
-  symmetric: boolean;
+  style: MapStyle;
+  grid: GridModel;
   points: Point[];
-  matrix: number[][];
 }
 
 export interface MapSummary {
@@ -48,12 +59,15 @@ export interface OptimizeRequest {
 export interface CreateMapRequest {
   id: string;
   name: string;
-  symmetric: boolean;
+  style: MapStyle;
+  grid: GridModel;
   points: Point[];
-  matrix: number[][];
 }
 
 export interface GenerateRequest {
+  style: MapStyle;
+  size: MapSize;
+  density: number;
   n: number;
   name?: string;
   id?: string;
