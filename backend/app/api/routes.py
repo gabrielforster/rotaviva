@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from app.config import get_settings
 from app.maps import generate as gen
 from app.maps import store
+from app.maps.grid import GridError, matrix_for_map
 from app.routing.baselines import brute_force_optimal, random_route_cost
 from app.routing.hill_climbing import hill_climb
 
@@ -33,9 +34,11 @@ def list_maps() -> list[dict]:
 # not actually affect matching here.)
 @router.post("/maps/generate", response_model=MapModel)
 def generate_map(req: GenerateRequest) -> dict:
-    map_id = req.id or f"gerado-{req.n}-{req.seed if req.seed is not None else 'rnd'}"
+    map_id = req.id or f"gerado-{req.style}-{req.n}-{req.seed if req.seed is not None else 'rnd'}"
     name = req.name or f"Mapa gerado ({req.n} pontos)"
-    data = gen.generate_map(map_id, name, req.n, seed=req.seed)
+    data = gen.generate_map(
+        map_id, name, req.n, style=req.style, size=req.size, density=req.density, seed=req.seed
+    )
     if req.save:
         try:
             return store.create_map(data)
@@ -99,7 +102,10 @@ def optimize(req: OptimizeRequest) -> OptimizeResponse:
     # Order stops with the start first, then the remaining stops in request order.
     ordered = [req.start_id] + [s for s in req.stop_ids if s != req.start_id]
     orig = [index_of[s] for s in ordered]
-    full = m["matrix"]
+    try:
+        full = matrix_for_map(m)
+    except GridError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     sub = [[full[a][b] for b in orig] for a in orig]
     n = len(ordered)
 

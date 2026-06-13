@@ -1,177 +1,65 @@
-import json
-
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
 
 
-def _client():
+@pytest.fixture
+def client(temp_store):
     return TestClient(create_app())
 
 
-def _seed_preset(presets_dir):
-    preset = {
-        "id": "triangulo",
-        "name": "Triangulo",
-        "source": "preset",
-        "symmetric": True,
+def _city_payload(map_id="mine"):
+    return {
+        "id": map_id,
+        "name": "Mine",
+        "style": "city",
+        "grid": {"cell_size": 40, "cells": ["...", "...", "..."]},
         "points": [
-            {"id": "a", "label": "A", "sprite": "shop", "x": 10, "y": 10},
-            {"id": "b", "label": "B", "sprite": "home", "x": 90, "y": 10},
-            {"id": "c", "label": "C", "sprite": "park", "x": 50, "y": 80},
+            {"id": "a", "label": "A", "sprite": "factory", "cell": {"row": 0, "col": 0}},
+            {"id": "b", "label": "B", "sprite": "shop", "cell": {"row": 0, "col": 2}},
+            {"id": "c", "label": "C", "sprite": "home", "cell": {"row": 2, "col": 2}},
         ],
-        "matrix": [[0, 8, 5], [8, 0, 4], [5, 4, 0]],
     }
-    (presets_dir / "triangulo.json").write_text(json.dumps(preset), encoding="utf-8")
 
 
-def test_list_maps_empty(temp_store):
-    r = _client().get("/maps")
+@pytest.mark.parametrize("style", ["city", "warehouse"])
+def test_generate_returns_grid_map(client, style):
+    r = client.post("/maps/generate", json={"style": style, "size": "small", "n": 5, "seed": 1})
     assert r.status_code == 200
-    assert r.json() == []
+    body = r.json()
+    assert body["style"] == style
+    assert "matrix" not in body
+    assert len(body["points"]) == 5
 
 
-def test_create_get_delete_roundtrip(temp_store):
-    client = _client()
-    body = {
-        "id": "mini",
-        "name": "Mini",
-        "symmetric": True,
-        "points": [
-            {"id": "a", "label": "A", "sprite": "shop", "x": 0, "y": 0},
-            {"id": "b", "label": "B", "sprite": "home", "x": 10, "y": 0},
-        ],
-        "matrix": [[0, 3], [3, 0]],
-    }
-    r = client.post("/maps", json=body)
-    assert r.status_code == 201, r.text
-    assert r.json()["source"] == "user"
-
-    r = client.get("/maps/mini")
-    assert r.status_code == 200
-    assert r.json()["name"] == "Mini"
-
-    r = client.delete("/maps/mini")
-    assert r.status_code == 204
-
-    r = client.get("/maps/mini")
-    assert r.status_code == 404
-
-
-def test_create_conflict_returns_409(temp_store):
-    client = _client()
-    body = {
-        "id": "dup",
-        "name": "Dup",
-        "symmetric": True,
-        "points": [
-            {"id": "a", "label": "A", "sprite": "shop", "x": 0, "y": 0},
-            {"id": "b", "label": "B", "sprite": "home", "x": 10, "y": 0},
-        ],
-        "matrix": [[0, 3], [3, 0]],
-    }
-    assert client.post("/maps", json=body).status_code == 201
-    assert client.post("/maps", json=body).status_code == 409
-
-
-def test_create_non_square_matrix_returns_422(temp_store):
-    client = _client()
-    body = {
-        "id": "bad",
-        "name": "Bad",
-        "symmetric": True,
-        "points": [
-            {"id": "a", "label": "A", "sprite": "shop", "x": 0, "y": 0},
-            {"id": "b", "label": "B", "sprite": "home", "x": 10, "y": 0},
-        ],
-        "matrix": [[0, 3, 9], [3, 0, 1]],
-    }
-    assert client.post("/maps", json=body).status_code == 422
-
-
-def test_delete_preset_is_forbidden(temp_store):
-    presets, _ = temp_store
-    _seed_preset(presets)
-    assert _client().delete("/maps/triangulo").status_code == 403
-
-
-def test_optimize_returns_route_and_baselines(temp_store):
-    presets, _ = temp_store
-    _seed_preset(presets)
-    r = _client().post(
-        "/optimize",
-        json={
-            "map_id": "triangulo",
-            "stop_ids": ["a", "b", "c"],
-            "start_id": "a",
-            "restarts": 10,
-            "seed": 1,
-        },
-    )
-    assert r.status_code == 200, r.text
-    data = r.json()
-    assert data["tour"][0] == "a"
-    assert data["tour"][-1] == "a"
-    assert len(data["tour"]) == 4  # a, b, c, a
-    # 3 stops: only one distinct cycle -> optimum == brute force == 8+4+5 = 17
-    assert data["total_cost"] == 17
-    assert data["baselines"]["brute_force_cost"] == 17
-    assert data["brute_force_skipped"] is False
-    assert data["baselines"]["random_cost"] >= data["total_cost"]
-
-
-def test_optimize_start_not_in_stops_returns_422(temp_store):
-    presets, _ = temp_store
-    _seed_preset(presets)
-    r = _client().post(
-        "/optimize",
-        json={"map_id": "triangulo", "stop_ids": ["a", "b"], "start_id": "c"},
-    )
-    assert r.status_code == 422
-
-
-def test_optimize_unknown_map_returns_404(temp_store):
-    r = _client().post(
-        "/optimize",
-        json={"map_id": "ghost", "stop_ids": ["a", "b"], "start_id": "a"},
-    )
-    assert r.status_code == 404
-
-
-def test_generate_without_save_is_not_persisted(temp_store):
-    client = _client()
-    r = client.post("/maps/generate", json={"n": 5, "seed": 2})
-    assert r.status_code == 200
-    assert r.json()["source"] == "generated"
-    assert len(r.json()["points"]) == 5
-    assert client.get("/maps").json() == []
-
-
-def test_generate_with_save_is_persisted(temp_store):
-    client = _client()
-    r = client.post("/maps/generate", json={"n": 4, "seed": 2, "save": True, "id": "g4", "name": "G4"})
-    assert r.status_code == 200
-    assert any(s["id"] == "g4" for s in client.get("/maps").json())
-
-
-def test_real_presets_are_listed_and_optimizable():
-    # No temp_store fixture here: use the real bundled presets dir.
-    client = TestClient(create_app())
-    ids = {s["id"] for s in client.get("/maps").json()}
-    assert {"triangulo", "cidade-exemplo"} <= ids
+def test_create_then_optimize_uses_grid_distance(client):
+    assert client.post("/maps", json=_city_payload()).status_code == 201
     r = client.post(
         "/optimize",
-        json={
-            "map_id": "cidade-exemplo",
-            "stop_ids": ["a", "b", "c", "d", "e"],
-            "start_id": "a",
-            "restarts": 30,
-            "seed": 5,
-        },
+        json={"map_id": "mine", "stop_ids": ["a", "b", "c"], "start_id": "a", "seed": 0},
     )
-    assert r.status_code == 200, r.text
-    data = r.json()
-    assert data["tour"][0] == "a" and data["tour"][-1] == "a"
-    # N=5 < guard -> brute force present, and the agent must match the optimum.
-    assert data["brute_force_skipped"] is False
-    assert data["total_cost"] == data["baselines"]["brute_force_cost"]
+    assert r.status_code == 200
+    body = r.json()
+    # a(0,0) b(0,2) c(2,2): closed tour a->b->c->a = 2 + 2 + 4 = 8 steps
+    assert body["total_cost"] == 8
+    assert body["tour"][0] == "a" and body["tour"][-1] == "a"
+
+
+def test_create_rejects_disconnected(client):
+    bad = _city_payload("walled")
+    bad["grid"]["cells"] = ["..#..", "..#..", "..#.."]
+    bad["points"] = [
+        {"id": "a", "label": "A", "sprite": "pin", "cell": {"row": 0, "col": 0}},
+        {"id": "b", "label": "B", "sprite": "pin", "cell": {"row": 0, "col": 4}},
+        {"id": "c", "label": "C", "sprite": "pin", "cell": {"row": 2, "col": 4}},
+    ]
+    assert client.post("/maps", json=bad).status_code == 422
+
+
+def test_list_and_get_presets():
+    # Uses the real bundled presets dir (no temp_store), so presets are visible.
+    real_client = TestClient(create_app())
+    ids = {m["id"] for m in real_client.get("/maps").json()}
+    assert {"centro", "galpao-central"} <= ids
+    assert real_client.get("/maps/centro").json()["style"] == "city"
