@@ -3,6 +3,7 @@ import json
 import pytest
 
 from app.maps import store
+from app.maps.grid import matrix_for_map
 
 
 def _grid_map(**over):
@@ -69,11 +70,6 @@ def test_create_rejects_duplicate_id(temp_store):
     store.create_map(_grid_map())
     with pytest.raises(store.MapConflict):
         store.create_map(_grid_map(name="Different"))
-
-
-from pathlib import Path
-
-from app.maps.grid import matrix_for_map
 
 
 def test_bundled_presets_are_valid_and_derivable():

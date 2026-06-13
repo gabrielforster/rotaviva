@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -33,7 +35,7 @@ def test_generate_returns_grid_map(client, style):
     assert len(body["points"]) == 5
 
 
-def test_create_then_optimize_uses_grid_distance(client):
+def test_optimize_returns_closed_integer_tour(client):
     assert client.post("/maps", json=_city_payload()).status_code == 201
     r = client.post(
         "/optimize",
@@ -44,6 +46,77 @@ def test_create_then_optimize_uses_grid_distance(client):
     # a(0,0) b(0,2) c(2,2): closed tour a->b->c->a = 2 + 2 + 4 = 8 steps
     assert body["total_cost"] == 8
     assert body["tour"][0] == "a" and body["tour"][-1] == "a"
+
+
+def test_optimize_distance_follows_streets_not_crow_flies(client):
+    # a(0,0) and b(2,0) are 2 cells apart in a straight line, but a wall at (1,0)
+    # forces the route around: 4 steps each way -> closed tour costs 8, not 4.
+    walled = {
+        "id": "walled",
+        "name": "Walled",
+        "style": "city",
+        "grid": {"cell_size": 40, "cells": ["...", "#..", "..."]},
+        "points": [
+            {"id": "a", "label": "A", "sprite": "factory", "cell": {"row": 0, "col": 0}},
+            {"id": "b", "label": "B", "sprite": "shop", "cell": {"row": 2, "col": 0}},
+        ],
+    }
+    assert client.post("/maps", json=walled).status_code == 201
+    r = client.post(
+        "/optimize",
+        json={"map_id": "walled", "stop_ids": ["a", "b"], "start_id": "a", "seed": 0},
+    )
+    assert r.status_code == 200
+    assert r.json()["total_cost"] == 8  # crow-flies round trip would be 4
+
+
+def test_generate_with_save_persists(client):
+    r = client.post(
+        "/maps/generate",
+        json={"style": "city", "size": "small", "n": 5, "seed": 1, "save": True,
+              "id": "gen-save", "name": "Gen Save"},
+    )
+    assert r.status_code == 200
+    assert client.get("/maps/gen-save").status_code == 200
+    assert any(m["id"] == "gen-save" for m in client.get("/maps").json())
+
+
+def test_generate_without_save_is_not_persisted(client):
+    r = client.post(
+        "/maps/generate",
+        json={"style": "city", "size": "small", "n": 4, "seed": 2, "id": "gen-nosave"},
+    )
+    assert r.status_code == 200
+    assert client.get("/maps/gen-nosave").status_code == 404
+
+
+def test_delete_preset_is_forbidden(temp_store):
+    presets_dir, _ = temp_store
+    (presets_dir / "p.json").write_text(json.dumps(_city_payload("p")))
+    bare = TestClient(create_app())
+    assert bare.delete("/maps/p").status_code == 403
+
+
+def test_optimize_unknown_map_is_404(client):
+    r = client.post(
+        "/optimize", json={"map_id": "nope", "stop_ids": ["a", "b"], "start_id": "a"}
+    )
+    assert r.status_code == 404
+
+
+def test_optimize_start_not_in_stops_is_422(client):
+    client.post("/maps", json=_city_payload("m422"))
+    r = client.post(
+        "/optimize",
+        json={"map_id": "m422", "stop_ids": ["a", "b"], "start_id": "c"},
+    )
+    assert r.status_code == 422
+
+
+def test_create_then_delete_roundtrip(client):
+    assert client.post("/maps", json=_city_payload("crud")).status_code == 201
+    assert client.delete("/maps/crud").status_code == 204
+    assert client.get("/maps/crud").status_code == 404
 
 
 def test_create_rejects_disconnected(client):

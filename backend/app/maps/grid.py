@@ -88,12 +88,14 @@ def derive_matrix(grid: Grid, cells: list[Cell]) -> list[list[int]]:
     """
     n = len(cells)
     matrix = [[0] * n for _ in range(n)]
+    # Distances are symmetric (undirected grid): fill each pair from one BFS.
     for i, src in enumerate(cells):
         dist = bfs_distances(grid, src)
-        for j, dst in enumerate(cells):
+        for j in range(i + 1, n):
+            dst = cells[j]
             if dst not in dist:
                 raise GridError(f"points {i} and {j} are not connected by streets")
-            matrix[i][j] = dist[dst]
+            matrix[i][j] = matrix[j][i] = dist[dst]
     return matrix
 
 
