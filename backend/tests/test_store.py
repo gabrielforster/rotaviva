@@ -69,3 +69,19 @@ def test_create_rejects_duplicate_id(temp_store):
     store.create_map(_grid_map())
     with pytest.raises(store.MapConflict):
         store.create_map(_grid_map(name="Different"))
+
+
+from pathlib import Path
+
+from app.maps.grid import matrix_for_map
+
+
+def test_bundled_presets_are_valid_and_derivable():
+    # Uses the real presets dir (no temp_store fixture).
+    presets = {m["id"]: m for m in [store.get_map("centro"), store.get_map("galpao-central")]}
+    assert presets["centro"]["style"] == "city"
+    assert presets["galpao-central"]["style"] == "warehouse"
+    for m in presets.values():
+        store.validate_map(m)            # structurally valid
+        matrix = matrix_for_map(m)       # connected -> derivable
+        assert len(matrix) == len(m["points"])

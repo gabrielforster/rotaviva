@@ -1,0 +1,26 @@
+{
+  "id": "galpao-central",
+  "name": "Galpão Central",
+  "style": "warehouse",
+  "grid": {
+    "cell_size": 40,
+    "cells": [
+      "...........",
+      ".#.#.#.#.#.",
+      ".#.#.#.#.#.",
+      "...........",
+      ".#.#.#.#.#.",
+      ".#.#.#.#.#.",
+      "...........",
+      "..........."
+    ]
+  },
+  "points": [
+    { "id": "a", "label": "Expedição", "sprite": "factory", "cell": { "row": 7, "col": 0 } },
+    { "id": "b", "label": "Corredor A", "sprite": "pin", "cell": { "row": 1, "col": 0 } },
+    { "id": "c", "label": "Corredor B", "sprite": "pin", "cell": { "row": 1, "col": 10 } },
+    { "id": "d", "label": "Picking 1", "sprite": "shop", "cell": { "row": 4, "col": 2 } },
+    { "id": "e", "label": "Picking 2", "sprite": "shop", "cell": { "row": 4, "col": 8 } },
+    { "id": "f", "label": "Picking 3", "sprite": "home", "cell": { "row": 6, "col": 5 } }
+  ]
+}

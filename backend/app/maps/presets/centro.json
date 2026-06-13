@@ -1,0 +1,24 @@
+{
+  "id": "centro",
+  "name": "Centro",
+  "style": "city",
+  "grid": {
+    "cell_size": 40,
+    "cells": [
+      "..........",
+      ".##.##.##.",
+      ".##.##.##.",
+      "..........",
+      ".##.##.##.",
+      ".##.##.##.",
+      ".........."
+    ]
+  },
+  "points": [
+    { "id": "a", "label": "Depósito", "sprite": "factory", "cell": { "row": 0, "col": 0 } },
+    { "id": "b", "label": "Mercado", "sprite": "shop", "cell": { "row": 0, "col": 9 } },
+    { "id": "c", "label": "Hospital", "sprite": "hospital", "cell": { "row": 3, "col": 3 } },
+    { "id": "d", "label": "Escola", "sprite": "school", "cell": { "row": 6, "col": 6 } },
+    { "id": "e", "label": "Casa", "sprite": "home", "cell": { "row": 6, "col": 0 } }
+  ]
+}
