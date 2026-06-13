@@ -1,4 +1,5 @@
 import type { MapModel } from "@/types";
+import { cellCenter } from "@/lib/grid";
 
 const SPRITE_EMOJI: Record<string, string> = {
   shop: "🛒",
@@ -10,6 +11,11 @@ const SPRITE_EMOJI: Record<string, string> = {
   pin: "📍",
 };
 
+const THEME = {
+  city: { surface: "#eef2f7", block: "#c8cfda", blockStroke: "#aab2c0" },
+  warehouse: { surface: "#efece5", block: "#b08968", blockStroke: "#8a6d52" },
+} as const;
+
 interface Props {
   map: MapModel;
   selected: Set<string>;
@@ -18,71 +24,57 @@ interface Props {
   onToggle: (id: string) => void;
 }
 
-export function MapCanvas({ map, selected, startId, tour, onToggle }: Props) {
-  if (map.points.length === 0) {
-    return <div className="h-full w-full rounded-lg border bg-card" />;
-  }
-  const xs = map.points.map((p) => p.x);
-  const ys = map.points.map((p) => p.y);
-  const pad = 48;
-  const minX = Math.min(...xs) - pad;
-  const minY = Math.min(...ys) - pad;
-  const width = Math.max(...xs) - Math.min(...xs) + pad * 2;
-  const height = Math.max(...ys) - Math.min(...ys) + pad * 2;
+export function MapCanvas({ map, selected, startId, onToggle }: Props) {
+  const { grid, points, style } = map;
+  const theme = THEME[style] ?? THEME.city;
+  const s = grid.cell_size;
+  const rows = grid.cells.length;
+  const cols = grid.cells[0]?.length ?? 0;
 
-  const byId = new Map(map.points.map((p) => [p.id, p]));
-  const routePoints = tour
-    ? tour
-        .map((id) => byId.get(id))
-        .filter((p): p is NonNullable<typeof p> => Boolean(p))
-        .map((p) => `${p.x},${p.y}`)
-        .join(" ")
-    : "";
+  if (cols === 0) return <div className="h-full w-full rounded-lg border bg-card" />;
 
   return (
     <svg
-      viewBox={`${minX} ${minY} ${width} ${height}`}
-      className="h-full w-full rounded-lg border bg-card"
+      viewBox={`0 0 ${cols * s} ${rows * s}`}
+      className="h-full w-full rounded-lg border"
+      style={{ background: theme.surface }}
       role="img"
       aria-label={`Mapa ${map.name}`}
     >
-      {tour && (
-        <polyline
-          points={routePoints}
-          fill="none"
-          stroke="hsl(142 71% 45%)"
-          strokeWidth={3}
-          strokeLinejoin="round"
-        />
+      {grid.cells.flatMap((row, r) =>
+        row.split("").map((ch, c) =>
+          ch === "#" ? (
+            <rect
+              key={`${r}-${c}`}
+              x={c * s + 1}
+              y={r * s + 1}
+              width={s - 2}
+              height={s - 2}
+              rx={style === "city" ? 2 : 0}
+              fill={theme.block}
+              stroke={theme.blockStroke}
+              strokeWidth={1}
+            />
+          ) : null,
+        ),
       )}
-      {map.points.map((p) => {
+
+      {points.map((p) => {
+        const [x, y] = cellCenter(grid, p.cell);
         const isSel = selected.has(p.id);
         const isStart = startId === p.id;
         return (
-          <g
-            key={p.id}
-            className="cursor-pointer"
-            onClick={() => onToggle(p.id)}
-          >
+          <g key={p.id} className="cursor-pointer" onClick={() => onToggle(p.id)}>
             <circle
-              cx={p.x}
-              cy={p.y}
-              r={16}
+              cx={x}
+              cy={y}
+              r={s * 0.42}
               fill={isStart ? "hsl(142 71% 45%)" : isSel ? "hsl(217 91% 60%)" : "white"}
               stroke={isSel || isStart ? "hsl(222 47% 11%)" : "hsl(215 16% 47%)"}
               strokeWidth={isSel || isStart ? 3 : 1.5}
             />
-            <text x={p.x} y={p.y + 5} textAnchor="middle" fontSize={16}>
+            <text x={x} y={y + s * 0.14} textAnchor="middle" fontSize={s * 0.4}>
               {SPRITE_EMOJI[p.sprite] ?? "📍"}
-            </text>
-            <text
-              x={p.x}
-              y={p.y + 34}
-              textAnchor="middle"
-              fontSize={11}
-              fill="hsl(215 16% 35%)"
-            >
-              {p.label}
             </text>
           </g>
         );

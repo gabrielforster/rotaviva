@@ -54,6 +54,9 @@ export default function App() {
     const genId = `gerado-${n}-${realSeed}`;
     try {
       const generated = await api.generateMap({
+        style: "city",
+        size: "medium",
+        density: 0.6,
         n,
         seed: realSeed,
         save: true,
