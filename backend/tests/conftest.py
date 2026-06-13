@@ -14,4 +14,5 @@ def temp_store(tmp_path, monkeypatch):
     data.mkdir()
     monkeypatch.setenv("ROTAVIVA_PRESETS_DIR", str(presets))
     monkeypatch.setenv("ROTAVIVA_DATA_DIR", str(data))
+    monkeypatch.setenv("ROTAVIVA_RUNS_DB", str(data / "runs.db"))
     return presets, data

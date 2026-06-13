@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     presets_dir: Path = _APP_DIR / "maps" / "presets"
     # Directory where user-registered maps are persisted (gitignored).
     data_dir: Path = _APP_DIR.parent / "data" / "maps"
+    # SQLite database of optimization runs (gitignored).
+    runs_db: Path = _APP_DIR.parent / "data" / "runs.db"
     # Brute force is skipped for subsets with N >= this guard.
     brute_force_guard: int = 10
     # Default random-restart count when the request omits it.
