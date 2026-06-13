@@ -33,6 +33,8 @@ export function GridPainter({ onCancel, onSave }: Props) {
   const [points, setPoints] = useState<Point[]>([]);
   const [mode, setMode] = useState<"paint" | "point">("paint");
   const [error, setError] = useState<string | null>(null);
+  // Monotonic id counter so removing then re-adding a point never reuses an id.
+  const [nextIdx, setNextIdx] = useState(0);
 
   const grid = { cell_size: CELL_SIZE, cells };
 
@@ -70,10 +72,11 @@ export function GridPainter({ onCancel, onSave }: Props) {
       return;
     }
     const i = points.length;
+    setNextIdx(nextIdx + 1);
     setPoints([
       ...points,
       {
-        id: pid(i),
+        id: pid(nextIdx),
         label: i === 0 ? "Depósito" : `Parada ${i}`,
         sprite: i === 0 ? "factory" : style === "warehouse" ? "pin" : "shop",
         cell: { row: r, col: c },
