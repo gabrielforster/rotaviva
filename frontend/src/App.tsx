@@ -3,14 +3,16 @@ import { api } from "@/lib/api";
 import type {
   CreateMapRequest,
   MapModel,
+  MapStyle,
   MapSummary,
   OptimizeResponse,
 } from "@/types";
 import { MapPicker } from "@/components/MapPicker";
+import type { GenerateOpts } from "@/components/MapPicker";
 import { MapCanvas } from "@/components/MapCanvas";
 import { StopList } from "@/components/StopList";
 import { ResultsPanel } from "@/components/ResultsPanel";
-import { MapEditor } from "@/components/MapEditor";
+import { GridPainter } from "@/components/GridPainter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -48,20 +50,18 @@ export default function App() {
     }
   };
 
-  const handleGenerate = async (n: number, seed: number | undefined) => {
+  const handleGenerate = async (opts: GenerateOpts) => {
     setError(null);
-    const realSeed = seed ?? Math.floor(Math.random() * 1e9);
-    const genId = `gerado-${n}-${realSeed}`;
+    const realSeed = opts.seed ?? Math.floor(Math.random() * 1e9);
+    const genId = `gerado-${opts.style}-${opts.n}-${realSeed}`;
+    const styleLabel: Record<MapStyle, string> = { city: "Cidade", warehouse: "Galpão" };
     try {
       const generated = await api.generateMap({
-        style: "city",
-        size: "medium",
-        density: 0.6,
-        n,
+        ...opts,
         seed: realSeed,
         save: true,
         id: genId,
-        name: `Gerado ${n}p (seed ${realSeed})`,
+        name: `${styleLabel[opts.style]} ${opts.n}p (seed ${realSeed})`,
       });
       await reloadMaps();
       selectMapModel(generated);
@@ -145,7 +145,7 @@ export default function App() {
             </CardHeader>
             <CardContent>
               {editing ? (
-                <MapEditor onCancel={() => setEditing(false)} onSave={saveMap} />
+                <GridPainter onCancel={() => setEditing(false)} onSave={saveMap} />
               ) : (
                 <MapPicker
                   maps={maps}
