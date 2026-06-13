@@ -53,7 +53,7 @@ def test_local_search_returns_local_optimum_no_worse_than_start():
     start = [0, 1, 2, 3]
     start_cost = _tour_cost(matrix, start)
     visited: set[tuple[int, ...]] = set()
-    best, best_cost = local_search(matrix, start, visited)
+    best, best_cost, _trace = local_search(matrix, start, visited)
     assert best[0] == 0
     assert sorted(best) == [0, 1, 2, 3]
     assert best_cost <= start_cost  # local search never makes the tour worse
@@ -68,7 +68,7 @@ def test_local_search_is_monotonic_on_a_symmetric_instance():
         [30, 20, 10, 0],
     ]
     visited: set[tuple[int, ...]] = set()
-    best, best_cost = local_search(matrix, [0, 2, 1, 3], visited)
+    best, best_cost, _trace = local_search(matrix, [0, 2, 1, 3], visited)
     # Optimal line tour visits in order: 0-1-2-3-0 = 10+10+10+30 = 60
     assert best_cost == 60
 
@@ -113,14 +113,15 @@ def test_determinism_same_seed_same_result():
     assert a == b
 
 
-def test_history_is_non_increasing_and_length_matches_restarts():
+def test_full_history_is_sawtooth_with_restart_markers():
     matrix = _circle_matrix(7)
-    _, best_cost, history = hill_climb(matrix, 7, restarts=8, seed=1)
-    assert len(history) == 8
-    assert history == sorted(history, reverse=True) or all(
-        history[i] >= history[i + 1] for i in range(len(history) - 1)
-    )
-    assert history[-1] == best_cost
+    res = hill_climb(matrix, 7, restarts=8, seed=1)
+    assert len(res.restart_indices) == 8
+    assert res.restart_indices[0] == 0
+    assert res.restart_indices == sorted(res.restart_indices)
+    assert all(0 <= i < len(res.full_history) for i in res.restart_indices)
+    # the global minimum over the whole trace is the reported best cost
+    assert min(res.full_history) == res.best_cost
 
 
 def test_circle_optimum_is_angular_order():
@@ -128,19 +129,19 @@ def test_circle_optimum_is_angular_order():
     # polygon: each of n edges has the same chord length.
     n = 8
     matrix = _circle_matrix(n)
-    _, best_cost, _ = hill_climb(matrix, n, restarts=40, seed=3)
+    best_cost = hill_climb(matrix, n, restarts=40, seed=3).best_cost
     chord = 2 * math.sin(math.pi / n)
     assert best_cost == pytest.approx(n * chord, rel=1e-9)
 
 
 def test_random_restart_never_worse_than_single_climb():
     matrix = _circle_matrix(7)
-    _, one, _ = hill_climb(matrix, 7, restarts=1, seed=42)
-    _, many, _ = hill_climb(matrix, 7, restarts=25, seed=42)
+    one = hill_climb(matrix, 7, restarts=1, seed=42).best_cost
+    many = hill_climb(matrix, 7, restarts=25, seed=42).best_cost
     # Restart 1 of the many-run is identical to the single run, so many <= one.
     assert many <= one
 
 
 def test_handles_one_and_two_stops():
-    assert hill_climb([[0]], 1, restarts=3, seed=0)[1] == 0
-    assert hill_climb([[0, 7], [7, 0]], 2, restarts=3, seed=0)[1] == 14
+    assert hill_climb([[0]], 1, restarts=3, seed=0).best_cost == 0
+    assert hill_climb([[0, 7], [7, 0]], 2, restarts=3, seed=0).best_cost == 14

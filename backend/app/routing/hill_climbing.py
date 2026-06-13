@@ -6,8 +6,23 @@ from __future__ import annotations
 
 import random
 from collections.abc import Iterator
+from dataclasses import dataclass
 
 from .tour import Matrix, Tour, tour_cost
+
+
+@dataclass(frozen=True)
+class HillClimbResult:
+    """Outcome of a random-restart run, with telemetry for the evolution chart.
+
+    ``full_history`` is every accepted-move cost concatenated across all restarts
+    (the sawtooth). ``restart_indices[k]`` is the position in ``full_history``
+    where restart ``k`` begins. ``min(full_history) == best_cost``.
+    """
+    best_tour: Tour
+    best_cost: float
+    full_history: list[float]
+    restart_indices: list[int]
 
 
 def two_opt_neighbors(tour: Tour) -> Iterator[Tour]:
@@ -32,18 +47,17 @@ def random_tour(n: int, rng: random.Random) -> Tour:
 
 def local_search(
     matrix: Matrix, tour: Tour, visited: set[tuple[int, ...]]
-) -> tuple[Tour, float]:
-    """Best-improving 2-opt local search from ``tour`` until a local optimum.
+) -> tuple[Tour, float, list[float]]:
+    """Best-improving 2-opt local search; also returns the accepted-cost trace.
 
-    ``visited`` is the run-wide memory of canonical tour keys already evaluated;
-    neighbors whose key is in ``visited`` are skipped (never re-evaluated), which
-    is the concept doc's "memória de estados". The search moves to the strictly
-    best-improving unvisited neighbor and stops when none improves on the current
-    cost. Cost strictly decreases on every accepted move, so it always terminates.
+    The trace starts with the initial tour's cost and appends the cost after
+    each accepted improving move, so it is a non-increasing sequence describing
+    this single climb. Search behavior is otherwise unchanged.
     """
     current = list(tour)
     current_cost = tour_cost(matrix, current)
     visited.add(tuple(current))
+    trace = [current_cost]
     while True:
         best_neighbor: Tour | None = None
         best_cost = current_cost
@@ -57,32 +71,33 @@ def local_search(
                 best_cost = cost
                 best_neighbor = neighbor
         if best_neighbor is None:
-            return current, current_cost
+            return current, current_cost, trace
         current = best_neighbor
         current_cost = best_cost
+        trace.append(current_cost)
 
 
 def hill_climb(
     matrix: Matrix, n: int, restarts: int, seed: int | None = None
-) -> tuple[Tour, float, list[float]]:
-    """Run Random-Restart Hill Climbing; return ``(best_tour, best_cost, history)``.
+) -> HillClimbResult:
+    """Run Random-Restart Hill Climbing; return a :class:`HillClimbResult`.
 
-    ``n`` is the number of stops (``matrix`` is ``n x n``). Each restart begins
-    from a fresh seeded random tour and runs ``local_search``; the run-wide
-    ``visited`` set is shared across restarts so identical tours are never
-    re-evaluated. ``history[k]`` is the best cost found through the end of
-    restart ``k`` — a non-increasing convergence curve for the chart.
-    Deterministic for a fixed ``seed``.
+    Each restart begins from a fresh seeded random tour; the run-wide ``visited``
+    set is shared so identical tours are never re-evaluated. ``full_history``
+    concatenates every restart's accepted-cost trace and ``restart_indices``
+    records where each restart begins. Deterministic for a fixed ``seed``.
     """
     rng = random.Random(seed)
     visited: set[tuple[int, ...]] = set()
     best_tour: Tour = list(range(n))
     best_cost = float("inf")
-    history: list[float] = []
+    full_history: list[float] = []
+    restart_indices: list[int] = []
     for _ in range(max(1, restarts)):
-        candidate, cost = local_search(matrix, random_tour(n, rng), visited)
+        restart_indices.append(len(full_history))
+        candidate, cost, trace = local_search(matrix, random_tour(n, rng), visited)
+        full_history.extend(trace)
         if cost < best_cost:
             best_cost = cost
             best_tour = candidate
-        history.append(best_cost)
-    return best_tour, best_cost, history
+    return HillClimbResult(best_tour, best_cost, full_history, restart_indices)
