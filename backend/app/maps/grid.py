@@ -81,6 +81,37 @@ def bfs_distances(grid: Grid, start: Cell) -> dict[Cell, int]:
     return dist
 
 
+def bfs_path(grid: Grid, start: Cell, goal: Cell) -> list[Cell] | None:
+    """Shortest 4-connected path of free cells from ``start`` to ``goal``.
+
+    Inclusive of both endpoints. Returns ``[start]`` when start == goal, and
+    ``None`` when either endpoint is blocked or the goal is unreachable.
+    """
+    if not grid.is_free(start) or not grid.is_free(goal):
+        return None
+    if start == goal:
+        return [start]
+    prev: dict[Cell, Cell | None] = {start: None}
+    queue: deque[Cell] = deque([start])
+    while queue:
+        cur = queue.popleft()
+        if cur == goal:
+            break
+        for nxt in neighbors(grid, cur):
+            if nxt not in prev:
+                prev[nxt] = cur
+                queue.append(nxt)
+    if goal not in prev:
+        return None
+    path: list[Cell] = []
+    node: Cell | None = goal
+    while node is not None:
+        path.append(node)
+        node = prev[node]
+    path.reverse()
+    return path
+
+
 def derive_matrix(grid: Grid, cells: list[Cell]) -> list[list[int]]:
     """Full symmetric step-count matrix between point cells.
 

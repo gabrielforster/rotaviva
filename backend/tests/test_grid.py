@@ -36,7 +36,7 @@ def test_cell_center_is_pixel_center():
     assert cell_center(g, (1, 1)) == (60.0, 60.0)
 
 
-from app.maps.grid import bfs_distances, derive_matrix, matrix_for_map, validate_points
+from app.maps.grid import bfs_distances, bfs_path, derive_matrix, matrix_for_map, validate_points
 
 
 def test_bfs_routes_around_walls():
@@ -94,3 +94,27 @@ def test_matrix_for_map_reads_point_cells():
         ],
     }
     assert matrix_for_map(data) == [[0, 2], [2, 0]]
+
+
+def test_bfs_path_is_shortest_and_inclusive():
+    g = parse_grid(["...", ".#.", "..."])
+    path = bfs_path(g, (0, 0), (2, 2))
+    assert path is not None
+    assert path[0] == (0, 0) and path[-1] == (2, 2)
+    # 4-connected shortest length between opposite corners on a 3x3 = 4 steps -> 5 cells
+    assert len(path) == 5
+    # consecutive cells are adjacent and free
+    for (r1, c1), (r2, c2) in zip(path, path[1:]):
+        assert abs(r1 - r2) + abs(c1 - c2) == 1
+        assert g.is_free((r2, c2))
+
+
+def test_bfs_path_same_cell_is_singleton():
+    g = parse_grid(["..", ".."])
+    assert bfs_path(g, (0, 0), (0, 0)) == [(0, 0)]
+
+
+def test_bfs_path_unreachable_returns_none():
+    # column of walls splits the grid in two
+    g = parse_grid([".#.", ".#.", ".#."])
+    assert bfs_path(g, (0, 0), (0, 2)) is None
