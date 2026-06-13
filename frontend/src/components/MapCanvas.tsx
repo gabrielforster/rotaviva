@@ -1,5 +1,6 @@
+import { useMemo } from "react";
 import type { MapModel } from "@/types";
-import { cellCenter } from "@/lib/grid";
+import { bfsPath, cellCenter } from "@/lib/grid";
 
 const SPRITE_EMOJI: Record<string, string> = {
   shop: "🛒",
@@ -24,12 +25,34 @@ interface Props {
   onToggle: (id: string) => void;
 }
 
-export function MapCanvas({ map, selected, startId, onToggle }: Props) {
+export function MapCanvas({ map, selected, startId, tour, onToggle }: Props) {
   const { grid, points, style } = map;
   const theme = THEME[style] ?? THEME.city;
   const s = grid.cell_size;
   const rows = grid.cells.length;
   const cols = grid.cells[0]?.length ?? 0;
+
+  const byId = useMemo(() => new Map(points.map((p) => [p.id, p])), [points]);
+
+  // Trace the street path between each consecutive pair of stops; concatenate
+  // into one polyline. Leg lengths equal the optimizer's costs by construction.
+  const routePts = useMemo(() => {
+    if (!tour || tour.length < 2) return "";
+    const pieces: string[] = [];
+    for (let i = 0; i < tour.length - 1; i++) {
+      const from = byId.get(tour[i])?.cell;
+      const to = byId.get(tour[i + 1])?.cell;
+      if (!from || !to) continue;
+      const path = bfsPath(grid, from, to);
+      if (!path) continue;
+      const leg = i === 0 ? path : path.slice(1); // avoid duplicating shared endpoint
+      for (const cell of leg) {
+        const [x, y] = cellCenter(grid, cell);
+        pieces.push(`${x},${y}`);
+      }
+    }
+    return pieces.join(" ");
+  }, [tour, grid, byId]);
 
   if (cols === 0) return <div className="h-full w-full rounded-lg border bg-card" />;
 
@@ -57,6 +80,17 @@ export function MapCanvas({ map, selected, startId, onToggle }: Props) {
             />
           ) : null,
         ),
+      )}
+
+      {routePts && (
+        <polyline
+          points={routePts}
+          fill="none"
+          stroke="hsl(142 71% 45%)"
+          strokeWidth={4}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
       )}
 
       {points.map((p) => {
