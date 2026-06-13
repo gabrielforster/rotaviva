@@ -2,14 +2,16 @@
 No business logic lives here — it orchestrates the routing core and the store."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 
+from app.charts import evolution_png, route_png
 from app.config import get_settings
 from app.maps import generate as gen
 from app.maps import store
 from app.maps.grid import GridError, matrix_for_map
 from app.routing.baselines import brute_force_optimal, random_route_cost
 from app.routing.hill_climbing import hill_climb
+from app.runs import store as runs_store
 
 from .schemas import (
     Baselines,
@@ -19,6 +21,8 @@ from .schemas import (
     MapSummary,
     OptimizeRequest,
     OptimizeResponse,
+    RunDetail,
+    RunSummary,
 )
 
 router = APIRouter()
@@ -111,17 +115,91 @@ def optimize(req: OptimizeRequest) -> OptimizeResponse:
 
     settings = get_settings()
     restarts = req.restarts or settings.default_restarts
-    best_tour, best_cost, history = hill_climb(sub, n, restarts, req.seed)
+    res = hill_climb(sub, n, restarts, req.seed)
 
-    # best_tour[0] is always 0 (start fixed); close the loop back to the start.
-    tour_ids = [ordered[i] for i in best_tour] + [ordered[0]]
+    # res.best_tour[0] is always 0 (start fixed); close the loop back to the start.
+    tour_ids = [ordered[i] for i in res.best_tour] + [ordered[0]]
     random_cost = random_route_cost(sub, n, req.seed)
     brute = brute_force_optimal(sub, n, settings.brute_force_guard)
 
+    pt_by_id = {p["id"]: p for p in m["points"]}
+    stop_labels = [pt_by_id[pid]["label"] for pid in ordered]
+    grid_snapshot = {
+        "cell_size": m["grid"]["cell_size"],
+        "cells": m["grid"]["cells"],
+        "points": [
+            {"id": pid, "label": pt_by_id[pid]["label"], "cell": pt_by_id[pid]["cell"]}
+            for pid in ordered
+        ],
+    }
+    run_id = runs_store.record_run(
+        map_id=m["id"], map_name=m["name"], start_id=req.start_id,
+        restarts=restarts, seed=req.seed, total_cost=res.best_cost,
+        random_cost=random_cost, brute_force_cost=brute,
+        stop_order=ordered, stop_labels=stop_labels, tour=tour_ids,
+        matrix=sub, full_history=res.full_history,
+        restart_indices=res.restart_indices, grid_snapshot=grid_snapshot,
+    )
+
     return OptimizeResponse(
+        run_id=run_id,
         tour=tour_ids,
-        total_cost=best_cost,
-        history=history,
+        total_cost=res.best_cost,
         baselines=Baselines(random_cost=random_cost, brute_force_cost=brute),
         brute_force_skipped=(brute is None),
+        matrix=sub,
+        stop_order=ordered,
+        stop_labels=stop_labels,
     )
+
+
+@router.get("/runs", response_model=list[RunSummary])
+def list_runs() -> list[dict]:
+    return runs_store.list_runs()
+
+
+@router.get("/runs/{run_id}", response_model=RunDetail)
+def get_run(run_id: int) -> RunDetail:
+    try:
+        r = runs_store.get_run(run_id)
+    except runs_store.RunNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return RunDetail(
+        id=r["id"], created_at=r["created_at"], map_id=r["map_id"],
+        map_name=r["map_name"], start_id=r["start_id"], restarts=r["restarts"],
+        seed=r["seed"], total_cost=r["total_cost"],
+        baselines=Baselines(
+            random_cost=r["random_cost"], brute_force_cost=r["brute_force_cost"]
+        ),
+        tour=r["tour"], stop_order=r["stop_order"], stop_labels=r["stop_labels"],
+        matrix=r["matrix"],
+    )
+
+
+@router.delete("/runs/{run_id}", status_code=204)
+def delete_run(run_id: int) -> None:
+    try:
+        runs_store.delete_run(run_id)
+    except runs_store.RunNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/runs/{run_id}/route.png")
+def run_route_png(run_id: int) -> Response:
+    try:
+        r = runs_store.get_run(run_id)
+    except runs_store.RunNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    g = r["grid_snapshot"]
+    png = route_png(g["cells"], g["cell_size"], g["points"], r["tour"], r["total_cost"])
+    return Response(content=png, media_type="image/png")
+
+
+@router.get("/runs/{run_id}/evolution.png")
+def run_evolution_png(run_id: int) -> Response:
+    try:
+        r = runs_store.get_run(run_id)
+    except runs_store.RunNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    png = evolution_png(r["full_history"], r["restart_indices"], r["total_cost"])
+    return Response(content=png, media_type="image/png")

@@ -75,8 +75,36 @@ class Baselines(BaseModel):
 
 
 class OptimizeResponse(BaseModel):
+    run_id: int
     tour: list[str]
     total_cost: float
-    history: list[float]
     baselines: Baselines
     brute_force_skipped: bool
+    matrix: list[list[int]]
+    stop_order: list[str]
+    stop_labels: list[str]
+
+
+class RunSummary(BaseModel):
+    id: int
+    created_at: str
+    map_id: str
+    map_name: str
+    total_cost: float
+    stop_count: int
+
+
+class RunDetail(BaseModel):
+    id: int
+    created_at: str
+    map_id: str
+    map_name: str
+    start_id: str
+    restarts: int
+    seed: Optional[int] = None
+    total_cost: float
+    baselines: Baselines
+    tour: list[str]
+    stop_order: list[str]
+    stop_labels: list[str]
+    matrix: list[list[int]]

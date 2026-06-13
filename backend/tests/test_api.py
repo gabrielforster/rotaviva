@@ -136,3 +136,42 @@ def test_list_and_get_presets():
     ids = {m["id"] for m in real_client.get("/maps").json()}
     assert {"centro", "galpao-central"} <= ids
     assert real_client.get("/maps/centro").json()["style"] == "city"
+
+
+def test_optimize_persists_run_and_returns_matrix(client):
+    assert client.post("/maps", json=_city_payload()).status_code == 201
+    body = {"map_id": "mine", "stop_ids": ["a", "b", "c"], "start_id": "a"}
+    res = client.post("/optimize", json=body)
+    assert res.status_code == 200
+    data = res.json()
+    assert isinstance(data["run_id"], int) and data["run_id"] >= 1
+    assert data["tour"][0] == data["tour"][-1] == "a"
+    assert len(data["matrix"]) == len(data["stop_order"]) == 3
+    assert data["stop_labels"] and "history" not in data
+
+
+def test_runs_list_detail_and_delete(client):
+    assert client.post("/maps", json=_city_payload()).status_code == 201
+    body = {"map_id": "mine", "stop_ids": ["a", "b", "c"], "start_id": "a"}
+    run_id = client.post("/optimize", json=body).json()["run_id"]
+    listed = client.get("/runs").json()
+    assert any(r["id"] == run_id and r["stop_count"] == 3 for r in listed)
+    detail = client.get(f"/runs/{run_id}").json()
+    assert detail["id"] == run_id and detail["matrix"]
+    assert client.delete(f"/runs/{run_id}").status_code == 204
+    assert client.get(f"/runs/{run_id}").status_code == 404
+
+
+def test_run_chart_endpoints_return_png(client):
+    assert client.post("/maps", json=_city_payload()).status_code == 201
+    body = {"map_id": "mine", "stop_ids": ["a", "b", "c"], "start_id": "a"}
+    run_id = client.post("/optimize", json=body).json()["run_id"]
+    for suffix in ("route.png", "evolution.png"):
+        r = client.get(f"/runs/{run_id}/{suffix}")
+        assert r.status_code == 200
+        assert r.headers["content-type"] == "image/png"
+        assert r.content.startswith(b"\x89PNG")
+
+
+def test_run_detail_unknown_is_404(client):
+    assert client.get("/runs/123456").status_code == 404
