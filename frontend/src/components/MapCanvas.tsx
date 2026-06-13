@@ -134,7 +134,7 @@ export function MapCanvas({ map, selected, startId, tour, onToggle }: Props) {
               cx={x}
               cy={y}
               r={s * 0.42}
-              fill={isStart ? "hsl(142 71% 45%)" : isSel ? "hsl(217 91% 60%)" : "white"}
+              fill={isStart ? "hsl(43 96% 56%)" : isSel ? "hsl(217 91% 60%)" : "white"}
               stroke={isSel || isStart ? "hsl(222 47% 11%)" : "hsl(215 16% 47%)"}
               strokeWidth={isSel || isStart ? 3 : 1.5}
             />
