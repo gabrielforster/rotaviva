@@ -34,6 +34,12 @@ export function MapCanvas({ map, selected, startId, tour, onToggle }: Props) {
 
   const byId = useMemo(() => new Map(points.map((p) => [p.id, p])), [points]);
 
+  const order = useMemo(() => {
+    const m = new Map<string, number>();
+    if (tour) tour.slice(0, -1).forEach((id, i) => m.set(id, i + 1));
+    return m;
+  }, [tour]);
+
   // Trace the street path between consecutive stops into one polyline, and drop
   // direction chevrons along it so the travel direction is easy to follow.
   const route = useMemo(() => {
@@ -135,6 +141,28 @@ export function MapCanvas({ map, selected, startId, tour, onToggle }: Props) {
             <text x={x} y={y + s * 0.14} textAnchor="middle" fontSize={s * 0.4}>
               {SPRITE_EMOJI[p.sprite] ?? "📍"}
             </text>
+            {order.has(p.id) && (
+              <>
+                <circle
+                  cx={x + s * 0.3}
+                  cy={y - s * 0.3}
+                  r={s * 0.2}
+                  fill="hsl(222 47% 11%)"
+                  stroke="white"
+                  strokeWidth={1.5}
+                />
+                <text
+                  x={x + s * 0.3}
+                  y={y - s * 0.3 + s * 0.09}
+                  textAnchor="middle"
+                  fontSize={s * 0.26}
+                  fontWeight="bold"
+                  fill="white"
+                >
+                  {order.get(p.id)}
+                </text>
+              </>
+            )}
           </g>
         );
       })}
