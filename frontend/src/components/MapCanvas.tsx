@@ -34,11 +34,12 @@ export function MapCanvas({ map, selected, startId, tour, onToggle }: Props) {
 
   const byId = useMemo(() => new Map(points.map((p) => [p.id, p])), [points]);
 
-  // Trace the street path between each consecutive pair of stops; concatenate
-  // into one polyline. Leg lengths equal the optimizer's costs by construction.
-  const routePts = useMemo(() => {
-    if (!tour || tour.length < 2) return "";
-    const pieces: string[] = [];
+  // Trace the street path between consecutive stops into one polyline, and drop
+  // direction chevrons along it so the travel direction is easy to follow.
+  const route = useMemo(() => {
+    const empty = { line: "", arrows: [] as { x: number; y: number; angle: number }[] };
+    if (!tour || tour.length < 2) return empty;
+    const pts: [number, number][] = [];
     for (let i = 0; i < tour.length - 1; i++) {
       const from = byId.get(tour[i])?.cell;
       const to = byId.get(tour[i + 1])?.cell;
@@ -46,12 +47,22 @@ export function MapCanvas({ map, selected, startId, tour, onToggle }: Props) {
       const path = bfsPath(grid, from, to);
       if (!path) continue;
       const leg = i === 0 ? path : path.slice(1); // avoid duplicating shared endpoint
-      for (const cell of leg) {
-        const [x, y] = cellCenter(grid, cell);
-        pieces.push(`${x},${y}`);
-      }
+      for (const cell of leg) pts.push(cellCenter(grid, cell));
     }
-    return pieces.join(" ");
+    const line = pts.map(([x, y]) => `${x},${y}`).join(" ");
+    // One chevron every couple of cells, oriented along the local travel direction.
+    const arrows: { x: number; y: number; angle: number }[] = [];
+    const step = 2;
+    for (let i = step; i < pts.length; i += step) {
+      const [x0, y0] = pts[i - 1];
+      const [x1, y1] = pts[i];
+      arrows.push({
+        x: (x0 + x1) / 2,
+        y: (y0 + y1) / 2,
+        angle: (Math.atan2(y1 - y0, x1 - x0) * 180) / Math.PI,
+      });
+    }
+    return { line, arrows };
   }, [tour, grid, byId]);
 
   if (cols === 0) return <div className="h-full w-full rounded-lg border bg-card" />;
@@ -82,9 +93,9 @@ export function MapCanvas({ map, selected, startId, tour, onToggle }: Props) {
         ),
       )}
 
-      {routePts && (
+      {route.line && (
         <polyline
-          points={routePts}
+          points={route.line}
           fill="none"
           stroke="hsl(142 71% 45%)"
           strokeWidth={4}
@@ -92,6 +103,20 @@ export function MapCanvas({ map, selected, startId, tour, onToggle }: Props) {
           strokeLinecap="round"
         />
       )}
+
+      {/* Direction chevrons (">") pointing the way the route travels */}
+      {route.arrows.map((a, i) => (
+        <path
+          key={i}
+          d={`M ${-s * 0.12} ${-s * 0.13} L ${s * 0.11} 0 L ${-s * 0.12} ${s * 0.13}`}
+          fill="none"
+          stroke="white"
+          strokeWidth={2.4}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          transform={`translate(${a.x} ${a.y}) rotate(${a.angle})`}
+        />
+      ))}
 
       {points.map((p) => {
         const [x, y] = cellCenter(grid, p.cell);

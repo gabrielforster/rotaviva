@@ -76,7 +76,8 @@ Click any point to add it as a stop.
 
 ### Optimized round-trip + benchmark
 The agent's closed route drawn in green, **following the streets at right angles around the buildings**,
-with the route sequence, total cost, the agent-vs-random-vs-brute-force comparison, and the convergence chart.
+with small `>` arrows marking the direction of travel, plus the route sequence, total cost, the
+agent-vs-random-vs-brute-force comparison, and the convergence chart.
 
 ![Optimized route following the streets, with comparison and convergence chart](docs/screenshots/02-optimized-route.png)
 
