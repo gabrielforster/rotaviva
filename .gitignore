@@ -6,6 +6,8 @@ __pycache__/
 
 # RotaViva user-registered maps (runtime data; presets are tracked separately)
 backend/data/maps/*.json
+# RotaViva optimization-run database (runtime data)
+backend/data/*.db
 
 # Node / frontend
 node_modules/
