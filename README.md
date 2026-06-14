@@ -64,8 +64,8 @@ in a fraction of the time, and the UI lets you *see* how close it gets.
 - **Goal-based agent**: Hill Climbing + Random Restart over a 2-opt neighborhood, deterministic under a seed.
 - **Visited-state memory** ("memória de estados") — identical tours are never re-evaluated within a run.
 - **Three-way benchmark**: agent route vs. random route vs. exact brute force (guarded to `N < 10`).
-- **Server-rendered charts** (matplotlib PNGs): the **route** along the streets and the full **cost-evolution sawtooth** with restart markers and the global-minimum annotation.
-- **Street-following route** drawn on the grid, with `>` direction arrows along the path so the travel order is easy to read.
+- **Server-rendered charts** (matplotlib PNGs): the **route** along the streets (same green scale, with the meaningless pixel axes removed) and the full **cost-evolution sawtooth** with restart markers and the global-minimum annotation.
+- **Street-following route** drawn as a **green scale** (light at the start → dark at the end) with `>` direction arrows along the path, so travel direction is easy to read.
 - **Order badges & gold start** — after optimizing, each stop shows its visiting order and the start is marked gold.
 - **Icon legend** beside the map explaining each sprite and the marker conventions (start / selected / route / order).
 - **Interactive cost matrix** for the selected stops (color-scaled table, shown above the benchmark comparison) — hovering a cell highlights that leg's street path and cost on the map.
@@ -86,7 +86,7 @@ Click any point to add it as a stop.
 ![A city grid with building blocks and sprite points](docs/screenshots/01-map-view.png)
 
 ### Optimized round-trip + benchmark
-The agent's closed route drawn in green, **following the streets at right angles around the buildings**,
+The agent's closed route drawn as a **green scale** (light start → dark end), **following the streets at right angles around the buildings**,
 with small `>` arrows marking the direction of travel and a **numbered badge** on each stop showing the
 visiting order (the **gold** marker is the start). The legend at the right explains the icons. Below the
 map: the route sequence and total cost, the **cost matrix**, the agent-vs-random-vs-brute-force
@@ -381,7 +381,7 @@ above the guard is **not** an error — it's skipped with `brute_force_skipped: 
 | `src/lib/grid.ts` | Pure helpers mirroring the backend grid contract: `cellCenter`, `isFree`, `bfsPath` (shortest cell path used to draw route legs) |
 | `src/lib/sprites.ts` | Shared sprite metadata: `SPRITE_EMOJI`, `SPRITE_LABELS`, `SPRITES` (used by canvas, painter, legend) |
 | `src/types.ts` | Shared TypeScript types mirroring the backend Pydantic schemas (`Cell`, `GridModel`, `style`, `OptimizeResponse`, `RunSummary`, `RunDetail`) |
-| `src/components/MapCanvas.tsx` | SVG canvas: themed grid, sprite points, click-to-toggle stops, the street-following route polyline (BFS) with `>` direction chevrons, **visiting-order badges**, a **gold** start marker, and the **hovered cost-matrix leg** (orange path + cost badge) |
+| `src/components/MapCanvas.tsx` | SVG canvas: themed grid, sprite points, click-to-toggle stops, the street-following **green-scale** route (BFS, light→dark = direction) with `>` direction chevrons, **visiting-order badges**, a **gold** start marker, and the **hovered cost-matrix leg** (orange path + cost badge) |
 | `src/components/MapLegend.tsx` | Legend beside the canvas: each map sprite + meaning, and the marker/route conventions |
 | `src/components/StopList.tsx` | Lists selected stops, radio to designate the start, remove button |
 | `src/components/MapPicker.tsx` | Dropdown of maps, delete (non-presets), and the **Novo mapa** button that opens the creation dialog |
