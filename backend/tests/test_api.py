@@ -158,6 +158,10 @@ def test_runs_list_detail_and_delete(client):
     assert any(r["id"] == run_id and r["stop_count"] == 3 for r in listed)
     detail = client.get(f"/runs/{run_id}").json()
     assert detail["id"] == run_id and detail["matrix"]
+    # the run carries a self-contained map snapshot (only its stops) for the map view
+    assert detail["map"]["grid"]["cells"]
+    assert {p["id"] for p in detail["map"]["points"]} == set(detail["stop_order"])
+    assert all("cell" in p for p in detail["map"]["points"])
     assert client.delete(f"/runs/{run_id}").status_code == 204
     assert client.get(f"/runs/{run_id}").status_code == 404
 

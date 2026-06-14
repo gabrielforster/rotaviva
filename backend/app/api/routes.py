@@ -124,11 +124,20 @@ def optimize(req: OptimizeRequest) -> OptimizeResponse:
 
     pt_by_id = {p["id"]: p for p in m["points"]}
     stop_labels = [pt_by_id[pid]["label"] for pid in ordered]
+    # Self-contained map snapshot (style/source/sprite included) so the run
+    # detail can re-render the map view even if the source map is later deleted.
     grid_snapshot = {
+        "style": m.get("style", "city"),
+        "source": m.get("source", "generated"),
         "cell_size": m["grid"]["cell_size"],
         "cells": m["grid"]["cells"],
         "points": [
-            {"id": pid, "label": pt_by_id[pid]["label"], "cell": pt_by_id[pid]["cell"]}
+            {
+                "id": pid,
+                "label": pt_by_id[pid]["label"],
+                "sprite": pt_by_id[pid].get("sprite", "pin"),
+                "cell": pt_by_id[pid]["cell"],
+            }
             for pid in ordered
         ],
     }
@@ -164,6 +173,24 @@ def get_run(run_id: int) -> RunDetail:
         r = runs_store.get_run(run_id)
     except runs_store.RunNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    # Reconstruct a self-contained map (only the run's stops) for the map view.
+    g = r["grid_snapshot"]
+    run_map = {
+        "id": r["map_id"],
+        "name": r["map_name"],
+        "source": g.get("source", "generated"),
+        "style": g.get("style", "city"),
+        "grid": {"cell_size": g["cell_size"], "cells": g["cells"]},
+        "points": [
+            {
+                "id": p["id"],
+                "label": p["label"],
+                "sprite": p.get("sprite", "pin"),
+                "cell": p["cell"],
+            }
+            for p in g["points"]
+        ],
+    }
     return RunDetail(
         id=r["id"], created_at=r["created_at"], map_id=r["map_id"],
         map_name=r["map_name"], start_id=r["start_id"], restarts=r["restarts"],
@@ -172,7 +199,7 @@ def get_run(run_id: int) -> RunDetail:
             random_cost=r["random_cost"], brute_force_cost=r["brute_force_cost"]
         ),
         tour=r["tour"], stop_order=r["stop_order"], stop_labels=r["stop_labels"],
-        matrix=r["matrix"],
+        matrix=r["matrix"], map=run_map,
     )
 
 

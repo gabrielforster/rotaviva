@@ -108,3 +108,5 @@ class RunDetail(BaseModel):
     stop_order: list[str]
     stop_labels: list[str]
     matrix: list[list[int]]
+    # Self-contained map snapshot (only the run's stops) for the run-detail map view.
+    map: MapModel

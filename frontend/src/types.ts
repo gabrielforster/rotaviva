@@ -74,6 +74,7 @@ export interface RunDetail {
   stop_order: string[];
   stop_labels: string[];
   matrix: number[][];
+  map: MapModel;
 }
 
 export interface OptimizeRequest {
