@@ -17,6 +17,15 @@ function setChar(row: string, col: number, ch: string): string {
 
 const pid = (i: number) => (i < 26 ? String.fromCharCode(97 + i) : `p${i}`);
 
+// A full snapshot of the editable state, pushed before each undoable edit.
+type Snapshot = {
+  rows: number;
+  cols: number;
+  cells: string[];
+  points: Point[];
+  nextIdx: number;
+};
+
 interface Props {
   onCancel: () => void;
   onSave: (body: CreateMapRequest) => Promise<void>;
@@ -43,6 +52,25 @@ export function GridPainter({ onCancel, onSave }: Props) {
     window.addEventListener("mouseup", stop);
     return () => window.removeEventListener("mouseup", stop);
   }, []);
+
+  // Undo stack: snapshot the state before each paint stroke / point change so a
+  // single click of "Desfazer" steps back exactly one edit (capped at 50).
+  const [history, setHistory] = useState<Snapshot[]>([]);
+
+  const pushHistory = () =>
+    setHistory((h) => [...h, { rows, cols, cells, points, nextIdx }].slice(-50));
+
+  const undo = () => {
+    if (history.length === 0) return;
+    const prev = history[history.length - 1];
+    setRows(prev.rows);
+    setCols(prev.cols);
+    setCells(prev.cells);
+    setPoints(prev.points);
+    setNextIdx(prev.nextIdx);
+    setHistory(history.slice(0, -1));
+    setError(null);
+  };
 
   const grid = { cell_size: CELL_SIZE, cells };
 
@@ -97,10 +125,14 @@ export function GridPainter({ onCancel, onSave }: Props) {
   const startCell = (r: number, c: number) => {
     setError(null);
     if (mode === "point") {
+      if (cells[r][c] === "#") return; // can't place on a wall — nothing changes
+      pushHistory();
       togglePoint(r, c);
       return;
     }
     const value: "#" | "." = cells[r][c] === "#" ? "." : "#";
+    if (value === "#" && hasPoint(r, c)) return; // can't wall a point — nothing changes
+    pushHistory();
     setDrag(value);
     paintCell(r, c, value);
   };
@@ -174,6 +206,15 @@ export function GridPainter({ onCancel, onSave }: Props) {
         </Button>
         <Button size="sm" variant={mode === "point" ? "default" : "outline"} onClick={() => setMode("point")}>
           Soltar pontos
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="ml-auto"
+          onClick={undo}
+          disabled={history.length === 0}
+        >
+          ↶ Desfazer
         </Button>
       </div>
 
