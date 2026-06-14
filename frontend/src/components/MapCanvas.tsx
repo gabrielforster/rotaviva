@@ -14,9 +14,10 @@ interface Props {
   startId: string | null;
   tour: string[] | null;
   onToggle: (id: string) => void;
+  highlight?: { fromId: string; toId: string; cost: number } | null;
 }
 
-export function MapCanvas({ map, selected, startId, tour, onToggle }: Props) {
+export function MapCanvas({ map, selected, startId, tour, onToggle, highlight }: Props) {
   const { grid, points, style } = map;
   const theme = THEME[style] ?? THEME.city;
   const s = grid.cell_size;
@@ -62,6 +63,24 @@ export function MapCanvas({ map, selected, startId, tour, onToggle }: Props) {
     return { line, arrows };
   }, [tour, grid, byId]);
 
+  // The street path + cost for the cost-matrix cell currently hovered.
+  const hi = useMemo(() => {
+    if (!highlight) return null;
+    const from = byId.get(highlight.fromId)?.cell;
+    const to = byId.get(highlight.toId)?.cell;
+    if (!from || !to) return null;
+    const path = bfsPath(grid, from, to);
+    if (!path) return null;
+    const pts = path.map((c) => cellCenter(grid, c));
+    return {
+      line: pts.map(([x, y]) => `${x},${y}`).join(" "),
+      mid: pts[Math.floor(pts.length / 2)],
+      from: cellCenter(grid, from),
+      to: cellCenter(grid, to),
+      cost: highlight.cost,
+    };
+  }, [highlight, grid, byId]);
+
   if (cols === 0) return <div className="h-full w-full rounded-lg border bg-card" />;
 
   return (
@@ -90,30 +109,49 @@ export function MapCanvas({ map, selected, startId, tour, onToggle }: Props) {
         ),
       )}
 
-      {route.line && (
-        <polyline
-          points={route.line}
-          fill="none"
-          stroke="hsl(142 71% 45%)"
-          strokeWidth={4}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-      )}
+      {/* The optimized route + chevrons, dimmed while a matrix cell is hovered. */}
+      <g opacity={hi ? 0.2 : 1}>
+        {route.line && (
+          <polyline
+            points={route.line}
+            fill="none"
+            stroke="hsl(142 71% 45%)"
+            strokeWidth={4}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        )}
+        {/* Direction chevrons (">") pointing the way the route travels */}
+        {route.arrows.map((a, i) => (
+          <path
+            key={i}
+            d={`M ${-s * 0.12} ${-s * 0.13} L ${s * 0.11} 0 L ${-s * 0.12} ${s * 0.13}`}
+            fill="none"
+            stroke="white"
+            strokeWidth={2.4}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            transform={`translate(${a.x} ${a.y}) rotate(${a.angle})`}
+          />
+        ))}
+      </g>
 
-      {/* Direction chevrons (">") pointing the way the route travels */}
-      {route.arrows.map((a, i) => (
-        <path
-          key={i}
-          d={`M ${-s * 0.12} ${-s * 0.13} L ${s * 0.11} 0 L ${-s * 0.12} ${s * 0.13}`}
-          fill="none"
-          stroke="white"
-          strokeWidth={2.4}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          transform={`translate(${a.x} ${a.y}) rotate(${a.angle})`}
-        />
-      ))}
+      {/* Hovered cost-matrix cell: the A→B street path + endpoint rings. */}
+      {hi && (
+        <>
+          <polyline
+            points={hi.line}
+            fill="none"
+            stroke="hsl(25 95% 53%)"
+            strokeWidth={6}
+            strokeOpacity={0.95}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+          <circle cx={hi.from[0]} cy={hi.from[1]} r={s * 0.5} fill="none" stroke="hsl(25 95% 53%)" strokeWidth={3} />
+          <circle cx={hi.to[0]} cy={hi.to[1]} r={s * 0.5} fill="none" stroke="hsl(25 95% 53%)" strokeWidth={3} />
+        </>
+      )}
 
       {points.map((p) => {
         const [x, y] = cellCenter(grid, p.cell);
@@ -157,6 +195,32 @@ export function MapCanvas({ map, selected, startId, tour, onToggle }: Props) {
           </g>
         );
       })}
+
+      {/* Cost badge for the hovered cell, drawn last so it sits on top. */}
+      {hi && (
+        <g transform={`translate(${hi.mid[0]} ${hi.mid[1]})`}>
+          <rect
+            x={-s * 0.5}
+            y={-s * 0.28}
+            width={s}
+            height={s * 0.56}
+            rx={s * 0.14}
+            fill="white"
+            stroke="hsl(25 95% 53%)"
+            strokeWidth={2}
+          />
+          <text
+            x={0}
+            y={s * 0.15}
+            textAnchor="middle"
+            fontSize={s * 0.34}
+            fontWeight="bold"
+            fill="hsl(25 95% 35%)"
+          >
+            {hi.cost}
+          </text>
+        </g>
+      )}
     </svg>
   );
 }

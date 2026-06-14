@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 interface Props {
   map: MapModel;
   result: OptimizeResponse;
+  onHover?: (h: { fromId: string; toId: string; cost: number } | null) => void;
 }
 
 function Row({ name, value }: { name: string; value: number }) {
@@ -17,7 +18,7 @@ function Row({ name, value }: { name: string; value: number }) {
   );
 }
 
-export function ResultsPanel({ map, result }: Props) {
+export function ResultsPanel({ map, result, onHover }: Props) {
   const labelOf = (id: string) => map.points.find((p) => p.id === id)?.label ?? id;
   const { baselines } = result;
   const improvement =
@@ -41,6 +42,32 @@ export function ResultsPanel({ map, result }: Props) {
 
       <Card>
         <CardHeader>
+          <CardTitle>Matriz de custos</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <CostMatrix
+            labels={result.stop_labels}
+            matrix={result.matrix}
+            onHover={(cell) =>
+              onHover?.(
+                cell
+                  ? {
+                      fromId: result.stop_order[cell.i],
+                      toId: result.stop_order[cell.j],
+                      cost: result.matrix[cell.i][cell.j],
+                    }
+                  : null,
+              )
+            }
+          />
+          <p className="text-xs text-muted-foreground">
+            Passe o mouse sobre uma célula para ver o trajeto e o custo no mapa.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Comparação</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 text-sm">
@@ -57,15 +84,6 @@ export function ResultsPanel({ map, result }: Props) {
             {Math.abs(improvement).toFixed(1)}% {improvement >= 0 ? "melhor" : "pior"} que a
             rota aleatória
           </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Matriz de custos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <CostMatrix labels={result.stop_labels} matrix={result.matrix} />
         </CardContent>
       </Card>
 

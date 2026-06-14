@@ -34,6 +34,9 @@ export default function App() {
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [openRunId, setOpenRunId] = useState<number | null>(null);
   const [createMode, setCreateMode] = useState<"generate" | "paint">("generate");
+  const [highlight, setHighlight] = useState<
+    { fromId: string; toId: string; cost: number } | null
+  >(null);
 
   const reloadMaps = () => api.listMaps().then(setMaps);
   const reloadRuns = () => api.listRuns().then(setRuns);
@@ -48,6 +51,7 @@ export default function App() {
     setStops([]);
     setStartId(null);
     setResult(null);
+    setHighlight(null);
     setEditing(false);
   };
 
@@ -99,6 +103,7 @@ export default function App() {
 
   const toggleStop = (id: string) => {
     setResult(null);
+    setHighlight(null);
     if (stops.includes(id)) {
       const next = stops.filter((s) => s !== id);
       setStops(next);
@@ -222,11 +227,12 @@ export default function App() {
                     startId={startId}
                     tour={result?.tour ?? null}
                     onToggle={toggleStop}
+                    highlight={highlight}
                   />
                 </div>
                 <MapLegend map={map} />
               </div>
-              {result && <ResultsPanel map={map} result={result} />}
+              {result && <ResultsPanel map={map} result={result} onHover={setHighlight} />}
             </>
           ) : (
             <p className="text-sm text-muted-foreground">
