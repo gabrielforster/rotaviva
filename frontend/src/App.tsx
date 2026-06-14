@@ -13,6 +13,7 @@ import { MapCanvas } from "@/components/MapCanvas";
 import { StopList } from "@/components/StopList";
 import { ResultsPanel } from "@/components/ResultsPanel";
 import { GridPainter } from "@/components/GridPainter";
+import { MapLegend } from "@/components/MapLegend";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -187,14 +188,17 @@ export default function App() {
         <main className="space-y-6">
           {map && !editing ? (
             <>
-              <div className="h-[480px]">
-                <MapCanvas
-                  map={map}
-                  selected={new Set(stops)}
-                  startId={startId}
-                  tour={result?.tour ?? null}
-                  onToggle={toggleStop}
-                />
+              <div className="grid gap-4 lg:grid-cols-[1fr_210px]">
+                <div className="h-[480px]">
+                  <MapCanvas
+                    map={map}
+                    selected={new Set(stops)}
+                    startId={startId}
+                    tour={result?.tour ?? null}
+                    onToggle={toggleStop}
+                  />
+                </div>
+                <MapLegend map={map} />
               </div>
               {result && <ResultsPanel map={map} result={result} />}
             </>

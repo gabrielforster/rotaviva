@@ -4,8 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { bfsPath } from "@/lib/grid";
-
-const SPRITES = ["shop", "home", "factory", "park", "school", "hospital", "pin"];
+import { SPRITES } from "@/lib/sprites";
 const CELL_SIZE = 40;
 
 function blankGrid(rows: number, cols: number): string[] {

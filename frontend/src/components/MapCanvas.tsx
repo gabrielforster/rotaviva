@@ -1,16 +1,7 @@
 import { useMemo } from "react";
 import type { MapModel } from "@/types";
 import { bfsPath, cellCenter } from "@/lib/grid";
-
-const SPRITE_EMOJI: Record<string, string> = {
-  shop: "🛒",
-  home: "🏠",
-  factory: "🏭",
-  park: "🌳",
-  school: "🏫",
-  hospital: "🏥",
-  pin: "📍",
-};
+import { SPRITE_EMOJI } from "@/lib/sprites";
 
 const THEME = {
   city: { surface: "#eef2f7", block: "#c8cfda", blockStroke: "#aab2c0" },
