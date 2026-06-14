@@ -1,6 +1,7 @@
 import type { MapModel, OptimizeResponse } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ConvergenceChart } from "./ConvergenceChart";
+import { CostMatrix } from "./CostMatrix";
+import { api } from "@/lib/api";
 
 interface Props {
   map: MapModel;
@@ -17,8 +18,7 @@ function Row({ name, value }: { name: string; value: number }) {
 }
 
 export function ResultsPanel({ map, result }: Props) {
-  const labelOf = (id: string) =>
-    map.points.find((p) => p.id === id)?.label ?? id;
+  const labelOf = (id: string) => map.points.find((p) => p.id === id)?.label ?? id;
   const { baselines } = result;
   const improvement =
     baselines.random_cost > 0
@@ -47,27 +47,43 @@ export function ResultsPanel({ map, result }: Props) {
           <Row name="Agente (Hill Climbing)" value={result.total_cost} />
           <Row name="Rota aleatória" value={baselines.random_cost} />
           {result.brute_force_skipped || baselines.brute_force_cost === null ? (
-            <p className="text-muted-foreground">
-              Força bruta: ignorada (muitas paradas)
-            </p>
+            <p className="text-muted-foreground">Força bruta: ignorada (muitas paradas)</p>
           ) : (
             <Row name="Força bruta (ótimo)" value={baselines.brute_force_cost} />
           )}
           <p
             className={`pt-2 font-medium ${improvement >= 0 ? "text-green-600" : "text-red-600"}`}
           >
-            {Math.abs(improvement).toFixed(1)}%{" "}
-            {improvement >= 0 ? "melhor" : "pior"} que a rota aleatória
+            {Math.abs(improvement).toFixed(1)}% {improvement >= 0 ? "melhor" : "pior"} que a
+            rota aleatória
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Convergência</CardTitle>
+          <CardTitle>Matriz de custos</CardTitle>
         </CardHeader>
         <CardContent>
-          <ConvergenceChart history={result.history} />
+          <CostMatrix labels={result.stop_labels} matrix={result.matrix} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Gráficos</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <img
+            src={api.routeChartUrl(result.run_id)}
+            alt="Rota otimizada"
+            className="w-full rounded-md border"
+          />
+          <img
+            src={api.evolutionChartUrl(result.run_id)}
+            alt="Evolução do custo"
+            className="w-full rounded-md border"
+          />
         </CardContent>
       </Card>
     </div>

@@ -41,11 +41,39 @@ export interface Baselines {
 }
 
 export interface OptimizeResponse {
+  run_id: number;
   tour: string[];
   total_cost: number;
-  history: number[];
   baselines: Baselines;
   brute_force_skipped: boolean;
+  matrix: number[][];
+  stop_order: string[];
+  stop_labels: string[];
+}
+
+export interface RunSummary {
+  id: number;
+  created_at: string;
+  map_id: string;
+  map_name: string;
+  total_cost: number;
+  stop_count: number;
+}
+
+export interface RunDetail {
+  id: number;
+  created_at: string;
+  map_id: string;
+  map_name: string;
+  start_id: string;
+  restarts: number;
+  seed: number | null;
+  total_cost: number;
+  baselines: Baselines;
+  tour: string[];
+  stop_order: string[];
+  stop_labels: string[];
+  matrix: number[][];
 }
 
 export interface OptimizeRequest {

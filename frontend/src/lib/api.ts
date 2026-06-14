@@ -5,6 +5,8 @@ import type {
   MapSummary,
   OptimizeRequest,
   OptimizeResponse,
+  RunDetail,
+  RunSummary,
 } from "@/types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
@@ -39,4 +41,10 @@ export const api = {
     request<MapModel>("/maps/generate", { method: "POST", body: JSON.stringify(body) }),
   optimize: (body: OptimizeRequest) =>
     request<OptimizeResponse>("/optimize", { method: "POST", body: JSON.stringify(body) }),
+  listRuns: () => request<RunSummary[]>("/runs"),
+  getRun: (id: number) => request<RunDetail>(`/runs/${id}`),
+  deleteRun: (id: number) =>
+    request<void>(`/runs/${id}`, { method: "DELETE" }),
+  routeChartUrl: (id: number) => `${BASE}/runs/${id}/route.png`,
+  evolutionChartUrl: (id: number) => `${BASE}/runs/${id}/evolution.png`,
 };
