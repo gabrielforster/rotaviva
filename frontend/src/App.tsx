@@ -16,6 +16,7 @@ import { GridPainter } from "@/components/GridPainter";
 import { MapLegend } from "@/components/MapLegend";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function App() {
   const [maps, setMaps] = useState<MapSummary[]>([]);
@@ -121,6 +122,7 @@ export default function App() {
     await api.createMap(body);
     await reloadMaps();
     selectMapModel(await api.getMap(body.id));
+    setEditing(false);
   };
 
   return (
@@ -142,25 +144,21 @@ export default function App() {
         <aside className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>{editing ? "Novo mapa" : "Mapa"}</CardTitle>
+              <CardTitle>Mapa</CardTitle>
             </CardHeader>
             <CardContent>
-              {editing ? (
-                <GridPainter onCancel={() => setEditing(false)} onSave={saveMap} />
-              ) : (
-                <MapPicker
-                  maps={maps}
-                  selectedId={map?.id ?? null}
-                  onSelect={handleSelect}
-                  onGenerate={handleGenerate}
-                  onDelete={handleDelete}
-                  onOpenEditor={() => setEditing(true)}
-                />
-              )}
+              <MapPicker
+                maps={maps}
+                selectedId={map?.id ?? null}
+                onSelect={handleSelect}
+                onGenerate={handleGenerate}
+                onDelete={handleDelete}
+                onOpenEditor={() => setEditing(true)}
+              />
             </CardContent>
           </Card>
 
-          {map && !editing && (
+          {map && (
             <Card>
               <CardHeader>
                 <CardTitle>Paradas</CardTitle>
@@ -186,7 +184,7 @@ export default function App() {
         </aside>
 
         <main className="space-y-6">
-          {map && !editing ? (
+          {map ? (
             <>
               <div className="grid gap-4 lg:grid-cols-[1fr_210px]">
                 <div className="h-[480px]">
@@ -209,6 +207,15 @@ export default function App() {
           )}
         </main>
       </div>
+
+      <Dialog open={editing} onOpenChange={setEditing}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo mapa</DialogTitle>
+          </DialogHeader>
+          <GridPainter onCancel={() => setEditing(false)} onSave={saveMap} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
