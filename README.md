@@ -70,7 +70,7 @@ in a fraction of the time, and the UI lets you *see* how close it gets.
 - **Icon legend** beside the map explaining each sprite and the marker conventions (start / selected / route / order).
 - **Cost matrix** for the selected stops, shown as a color-scaled table.
 - **Persisted run history** — every optimization is saved to SQLite with an id; browse past runs and reopen any one (route + evolution charts + matrix) from the history panel.
-- **Map creation in a dialog** — paint a new grid in a modal without leaving the picker.
+- **Unified "Novo mapa" dialog** — a single modal creates maps two ways via a **Gerar / Pintar** toggle: procedurally generate (style · size · density · points · seed) or hand-paint a grid. All generation inputs live inside the dialog, not the sidebar.
 - **Three map sources**: bundled **presets** (one city, one warehouse), **user-painted** maps, and
   **auto-generated** city/warehouse grids (style + size + density + seed).
 - **Built-in grid painter** — paint buildings/shelves, drop points on free cells, pick a style; the
@@ -101,11 +101,14 @@ finds a route ~50% better than a random one — the core value of the heuristic.
 
 ![A generated 12-stop warehouse optimized by the agent](docs/screenshots/03-generated-map.png)
 
-### Grid painter — design your own
-Paint buildings or shelves, switch to point mode and drop stops on the free cells, pick a style; the
-distance matrix is **derived from the streets** (no hand-edited numbers).
+### New-map dialog — generate or paint
+The **Novo mapa** dialog (opened from the sidebar button) creates a map two ways via a **Gerar / Pintar**
+toggle: *Gerar* procedurally builds a city/warehouse grid (style · size · density · points · seed), while
+*Pintar* (shown here) lets you paint buildings/shelves and drop stops on the free cells. Either way the
+distance matrix is **derived from the layout** (4-connected shortest paths) — no hand-edited numbers. All
+generation inputs live inside this dialog.
 
-![The grid painter with painted shelves and dropped points](docs/screenshots/04-map-editor.png)
+![The Novo mapa dialog in paint mode, with the Gerar/Pintar toggle](docs/screenshots/04-map-editor.png)
 
 ---
 
@@ -233,7 +236,8 @@ rotaviva/
 │   │   │   ├── MapCanvas.tsx       # SVG grid, route, order badges, gold start, direction chevrons
 │   │   │   ├── MapLegend.tsx       # icon + marker-convention legend beside the canvas
 │   │   │   ├── StopList.tsx        # selected stops, designate start, remove
-│   │   │   ├── MapPicker.tsx       # choose / generate (style·size·density) / open-painter
+│   │   │   ├── MapPicker.tsx       # choose / delete a map; opens the Novo mapa dialog
+│   │   │   ├── MapGenerator.tsx    # procedural generation form (lives in the Novo mapa dialog)
 │   │   │   ├── GridPainter.tsx     # paint buildings/shelves, drop points; matrix derived
 │   │   │   ├── ResultsPanel.tsx    # route, cost, comparison, cost matrix, PNG charts
 │   │   │   ├── CostMatrix.tsx      # color-scaled distance-matrix table
@@ -373,8 +377,9 @@ above the guard is **not** an error — it's skipped with `brute_force_skipped: 
 | `src/components/MapCanvas.tsx` | SVG canvas: themed grid, sprite points, click-to-toggle stops, the street-following route polyline (BFS) with `>` direction chevrons, **visiting-order badges**, and a **gold** start marker |
 | `src/components/MapLegend.tsx` | Legend beside the canvas: each map sprite + meaning, and the marker/route conventions |
 | `src/components/StopList.tsx` | Lists selected stops, radio to designate the start, remove button |
-| `src/components/MapPicker.tsx` | Dropdown of maps, delete (non-presets), grid generator (style·size·density·n·seed), open-painter button |
-| `src/components/GridPainter.tsx` | Paint buildings/shelves, drop points on free cells, pick a style; validates connectivity and posts a grid map (matrix derived server-side); shown in a modal dialog |
+| `src/components/MapPicker.tsx` | Dropdown of maps, delete (non-presets), and the **Novo mapa** button that opens the creation dialog |
+| `src/components/MapGenerator.tsx` | Procedural-generation form (style · size · density · points · seed); lives inside the Novo mapa dialog (Gerar mode) |
+| `src/components/GridPainter.tsx` | Paint buildings/shelves, drop points on free cells, pick a style; validates connectivity and posts a grid map (matrix derived server-side); the Novo mapa dialog's Pintar mode |
 | `src/components/ResultsPanel.tsx` | Route sequence, total cost, agent/random/brute-force comparison, improvement %, the **cost matrix**, and the route + evolution **PNG charts** |
 | `src/components/CostMatrix.tsx` | Color-scaled HTML table of the stop-to-stop distance matrix |
 | `src/components/RunsList.tsx` | History of past optimizations (newest first); open or delete a run |
