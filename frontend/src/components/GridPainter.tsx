@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CreateMapRequest, MapStyle, Point } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { bfsPath } from "@/lib/grid";
-import { SPRITES } from "@/lib/sprites";
+import { SPRITE_EMOJI, SPRITE_LABELS, SPRITES } from "@/lib/sprites";
 const CELL_SIZE = 40;
 
 function blankGrid(rows: number, cols: number): string[] {
@@ -34,6 +34,15 @@ export function GridPainter({ onCancel, onSave }: Props) {
   const [error, setError] = useState<string | null>(null);
   // Monotonic id counter so removing then re-adding a point never reuses an id.
   const [nextIdx, setNextIdx] = useState(0);
+  // Drag-to-paint: the value ("#"/".") chosen at mouse-down, applied to every
+  // cell the pointer enters until the button is released anywhere on the page.
+  const [drag, setDrag] = useState<null | "#" | ".">(null);
+
+  useEffect(() => {
+    const stop = () => setDrag(null);
+    window.addEventListener("mouseup", stop);
+    return () => window.removeEventListener("mouseup", stop);
+  }, []);
 
   const grid = { cell_size: CELL_SIZE, cells };
 
@@ -56,14 +65,14 @@ export function GridPainter({ onCancel, onSave }: Props) {
   const hasPoint = (r: number, c: number) =>
     points.find((p) => p.cell.row === r && p.cell.col === c);
 
-  const clickCell = (r: number, c: number) => {
-    setError(null);
-    if (mode === "paint") {
-      const isWall = cells[r][c] === "#";
-      if (!isWall && hasPoint(r, c)) return; // don't wall a cell with a point
-      setCells(cells.map((row, i) => (i === r ? setChar(row, c, isWall ? "." : "#") : row)));
-      return;
-    }
+  const paintCell = (r: number, c: number, value: "#" | ".") => {
+    if (value === "#" && hasPoint(r, c)) return; // don't wall a cell with a point
+    setCells((prev) =>
+      prev[r][c] === value ? prev : prev.map((row, i) => (i === r ? setChar(row, c, value) : row)),
+    );
+  };
+
+  const togglePoint = (r: number, c: number) => {
     if (cells[r][c] === "#") return; // can't place on a wall
     const existing = hasPoint(r, c);
     if (existing) {
@@ -81,6 +90,24 @@ export function GridPainter({ onCancel, onSave }: Props) {
         cell: { row: r, col: c },
       },
     ]);
+  };
+
+  // Mouse-down on a cell: in point mode toggle a point; in paint mode pick the
+  // paint value from the starting cell (free → wall, wall → erase) and start a drag.
+  const startCell = (r: number, c: number) => {
+    setError(null);
+    if (mode === "point") {
+      togglePoint(r, c);
+      return;
+    }
+    const value: "#" | "." = cells[r][c] === "#" ? "." : "#";
+    setDrag(value);
+    paintCell(r, c, value);
+  };
+
+  // Pointer enters a cell mid-drag: keep applying the same paint value.
+  const enterCell = (r: number, c: number) => {
+    if (drag && mode === "paint") paintCell(r, c, drag);
   };
 
   const setPoint = (idx: number, patch: Partial<Point>) =>
@@ -150,8 +177,17 @@ export function GridPainter({ onCancel, onSave }: Props) {
         </Button>
       </div>
 
+      <p className="text-xs text-muted-foreground">
+        {mode === "paint"
+          ? "Clique e arraste para pintar; clique numa célula pintada para apagar."
+          : "Clique numa célula livre para adicionar ou remover um ponto."}
+      </p>
+
       <div className="overflow-auto rounded-md border p-2">
-        <div className="inline-grid gap-0.5" style={{ gridTemplateColumns: `repeat(${cols}, 18px)` }}>
+        <div
+          className="inline-grid gap-0.5 select-none"
+          style={{ gridTemplateColumns: `repeat(${cols}, 18px)` }}
+        >
           {cells.flatMap((row, r) =>
             row.split("").map((ch, c) => {
               const pt = hasPoint(r, c);
@@ -165,7 +201,13 @@ export function GridPainter({ onCancel, onSave }: Props) {
               return (
                 <button
                   key={`${r}-${c}`}
-                  onClick={() => clickCell(r, c)}
+                  type="button"
+                  draggable={false}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    startCell(r, c);
+                  }}
+                  onMouseEnter={() => enterCell(r, c)}
                   title={pt ? pt.label : `${r},${c}`}
                   style={{ width: 18, height: 18, background: bg, fontSize: 10, lineHeight: "18px" }}
                   className="rounded-sm border border-black/5"
@@ -191,7 +233,9 @@ export function GridPainter({ onCancel, onSave }: Props) {
                 onChange={(e) => setPoint(i, { sprite: e.target.value })}
               >
                 {SPRITES.map((spr) => (
-                  <option key={spr} value={spr}>{spr}</option>
+                  <option key={spr} value={spr}>
+                    {SPRITE_EMOJI[spr] ?? "📍"} {SPRITE_LABELS[spr] ?? spr}
+                  </option>
                 ))}
               </select>
             </div>
