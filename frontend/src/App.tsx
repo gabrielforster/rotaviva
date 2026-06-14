@@ -6,6 +6,7 @@ import type {
   MapStyle,
   MapSummary,
   OptimizeResponse,
+  RunSummary,
 } from "@/types";
 import { MapPicker } from "@/components/MapPicker";
 import type { GenerateOpts } from "@/components/MapPicker";
@@ -17,6 +18,8 @@ import { MapLegend } from "@/components/MapLegend";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { RunsList } from "@/components/RunsList";
+import { RunDetail } from "@/components/RunDetail";
 
 export default function App() {
   const [maps, setMaps] = useState<MapSummary[]>([]);
@@ -27,11 +30,15 @@ export default function App() {
   const [editing, setEditing] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [runs, setRuns] = useState<RunSummary[]>([]);
+  const [openRunId, setOpenRunId] = useState<number | null>(null);
 
   const reloadMaps = () => api.listMaps().then(setMaps);
+  const reloadRuns = () => api.listRuns().then(setRuns);
 
   useEffect(() => {
     reloadMaps().catch((e) => setError(String(e)));
+    reloadRuns().catch((e) => setError(String(e)));
   }, []);
 
   const selectMapModel = (m: MapModel) => {
@@ -111,10 +118,21 @@ export default function App() {
         start_id: startId,
       });
       setResult(res);
+      await reloadRuns();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setRunning(false);
+    }
+  };
+
+  const handleDeleteRun = async (id: number) => {
+    try {
+      await api.deleteRun(id);
+      if (openRunId === id) setOpenRunId(null);
+      await reloadRuns();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -181,6 +199,15 @@ export default function App() {
               </CardContent>
             </Card>
           )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Histórico</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <RunsList runs={runs} onOpen={setOpenRunId} onDelete={handleDeleteRun} />
+            </CardContent>
+          </Card>
         </aside>
 
         <main className="space-y-6">
@@ -214,6 +241,15 @@ export default function App() {
             <DialogTitle>Novo mapa</DialogTitle>
           </DialogHeader>
           <GridPainter onCancel={() => setEditing(false)} onSave={saveMap} />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openRunId !== null} onOpenChange={(o) => !o && setOpenRunId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Otimização #{openRunId}</DialogTitle>
+          </DialogHeader>
+          {openRunId !== null && <RunDetail id={openRunId} />}
         </DialogContent>
       </Dialog>
     </div>
