@@ -249,7 +249,7 @@ rotaviva/
 │   │   │   ├── ResultsPanel.tsx    # route, cost, comparison, cost matrix, PNG charts
 │   │   │   ├── CostMatrix.tsx      # color-scaled distance-matrix table
 │   │   │   ├── RunsList.tsx        # past-optimization history list
-│   │   │   ├── RunDetail.tsx       # read-only run detail (matrix + charts)
+│   │   │   ├── RunDetail.tsx       # read-only run detail (map view + matrix + charts)
 │   │   │   └── ui/                 # shadcn/ui primitives (button, card, dialog, …)
 │   │   └── App.tsx                # state owner + layout (map, stops, result, runs, dialogs)
 │   └── package.json               # pnpm project (Vite + React + Tailwind v4)
@@ -320,7 +320,7 @@ Open <http://localhost:5173>, pick **Centro**, click a few points, set a start, 
 | `POST` | `/maps/generate` | Generate a city/warehouse grid (style·size·density·n·seed); optionally save |
 | `POST` | `/optimize` | Run the agent + baselines for a map/subset; **persists a run** and returns its `run_id` + cost matrix |
 | `GET`  | `/runs` | List past optimization runs (newest first, summary form) |
-| `GET`  | `/runs/{id}` | Full run detail (tour, costs, baselines, cost matrix, params) |
+| `GET`  | `/runs/{id}` | Full run detail (tour, costs, baselines, cost matrix, params) + a self-contained **map snapshot** (the run's stops) for the detail map view |
 | `DELETE` | `/runs/{id}` | Delete a run → `204` |
 | `GET`  | `/runs/{id}/route.png` | Route chart (PNG) rendered from the run snapshot |
 | `GET`  | `/runs/{id}/evolution.png` | Cost-evolution chart (PNG) rendered from the run snapshot |
@@ -390,7 +390,7 @@ above the guard is **not** an error — it's skipped with `brute_force_skipped: 
 | `src/components/ResultsPanel.tsx` | Route sequence, total cost, agent/random/brute-force comparison, improvement %, the **cost matrix**, and the route + evolution **PNG charts** |
 | `src/components/CostMatrix.tsx` | Color-scaled HTML table of the stop-to-stop distance matrix; emits hover events so the map can highlight that leg |
 | `src/components/RunsList.tsx` | History of past optimizations (newest first); open or delete a run |
-| `src/components/RunDetail.tsx` | Read-only detail of a saved run (summary, cost matrix, route + evolution PNGs) |
+| `src/components/RunDetail.tsx` | Read-only detail of a saved run: interactive **map view** (route, badges, gold start, and the same cost-matrix hover highlight) first, then summary, cost matrix, and route + evolution PNGs |
 
 ## Testing
 
