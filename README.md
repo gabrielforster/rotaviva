@@ -14,7 +14,7 @@ the grid is in-app data, so the focus stays on the AI/optimization logic.
 > v0.1 — a modern web rebuild of the original RotaViva concept (a ~200-line Python/NetworkX/Matplotlib
 > script), preserving the AI intent: local search over a city graph, measured against baselines.
 
-![Optimized route, three-way comparison, and convergence chart](docs/screenshots/02-optimized-route.png)
+![Optimized route with order badges and gold start, the cost matrix, and server-rendered route + evolution charts](docs/screenshots/02-optimized-route.png)
 
 ---
 
@@ -42,11 +42,16 @@ the grid is in-app data, so the focus stays on the AI/optimization logic.
 3. The backend derives the distance sub-matrix for those stops (shortest paths along the streets) and runs the **agent**:
    Hill Climbing over a **2-opt** neighborhood, with **Random Restart** to escape local optima,
    and a **memory of visited states** so no tour is evaluated twice in a run.
-4. The frontend draws the resulting **closed round-trip** on the map and shows:
+4. The frontend draws the resulting **closed round-trip** on the map — with a **visiting-order badge**
+   on each stop, a **gold start marker**, and an **icon legend** — and shows:
    - the **route sequence** and its **total cost**,
    - a **three-way comparison**: agent vs. a random route vs. the **brute-force optimum**
      (computed only for small instances, `N < 10`),
-   - a **convergence chart** of best-cost-per-restart.
+   - the **cost matrix** for the chosen stops,
+   - two **server-rendered charts** (matplotlib PNGs): the **route** following the streets and the full
+     **cost-evolution sawtooth** across all restarts.
+5. Every optimization is **persisted** (SQLite) with a generated `run_id`, so past runs can be **listed
+   and reopened** from the history panel.
 
 RotaViva solves the **Traveling Salesman Problem (TSP)** — visiting every chosen stop exactly once
 and returning to the start at minimum total distance. TSP is NP-hard, so for anything but tiny
@@ -59,13 +64,18 @@ in a fraction of the time, and the UI lets you *see* how close it gets.
 - **Goal-based agent**: Hill Climbing + Random Restart over a 2-opt neighborhood, deterministic under a seed.
 - **Visited-state memory** ("memória de estados") — identical tours are never re-evaluated within a run.
 - **Three-way benchmark**: agent route vs. random route vs. exact brute force (guarded to `N < 10`).
-- **Convergence chart** — best cost per restart, so you can watch the search improve.
+- **Server-rendered charts** (matplotlib PNGs): the **route** along the streets and the full **cost-evolution sawtooth** with restart markers and the global-minimum annotation.
 - **Street-following route** drawn on the grid, with `>` direction arrows along the path so the travel order is easy to read.
+- **Order badges & gold start** — after optimizing, each stop shows its visiting order and the start is marked gold.
+- **Icon legend** beside the map explaining each sprite and the marker conventions (start / selected / route / order).
+- **Cost matrix** for the selected stops, shown as a color-scaled table.
+- **Persisted run history** — every optimization is saved to SQLite with an id; browse past runs and reopen any one (route + evolution charts + matrix) from the history panel.
+- **Map creation in a dialog** — paint a new grid in a modal without leaving the picker.
 - **Three map sources**: bundled **presets** (one city, one warehouse), **user-painted** maps, and
   **auto-generated** city/warehouse grids (style + size + density + seed).
 - **Built-in grid painter** — paint buildings/shelves, drop points on free cells, pick a style; the
   distance matrix is **derived from the layout** (4-connected shortest paths).
-- Clean separation: a **pure, fully unit-tested** algorithm core (61 backend tests) behind a thin HTTP API.
+- Clean separation: a **pure, fully unit-tested** algorithm core (74 backend tests) behind a thin HTTP API.
 
 ## Screenshots
 
@@ -77,10 +87,12 @@ Click any point to add it as a stop.
 
 ### Optimized round-trip + benchmark
 The agent's closed route drawn in green, **following the streets at right angles around the buildings**,
-with small `>` arrows marking the direction of travel, plus the route sequence, total cost, the
-agent-vs-random-vs-brute-force comparison, and the convergence chart.
+with small `>` arrows marking the direction of travel and a **numbered badge** on each stop showing the
+visiting order (the **gold** marker is the start). The legend at the right explains the icons. Below the
+map: the route sequence, total cost, the agent-vs-random-vs-brute-force comparison, the **cost matrix**,
+and the two **server-rendered charts** (route + cost-evolution sawtooth).
 
-![Optimized route following the streets, with comparison and convergence chart](docs/screenshots/02-optimized-route.png)
+![Optimized route with order badges, gold start, cost matrix, and route/evolution charts](docs/screenshots/02-optimized-route.png)
 
 ### Generated warehouse — where brute force gives up
 An auto-generated warehouse with 12 stops. Brute force is skipped ("ignorada"), but the agent still
@@ -146,8 +158,11 @@ already seen are skipped, so **no identical tour is ever evaluated twice within 
 concept doc's "memória de estados", shared across all restarts.
 
 ### Convergence history
-After each restart the **best-cost-so-far** is appended to a `history` list — a non-increasing curve
-that the frontend renders as the convergence chart.
+The optimizer records the **full search trace**: every accepted-move cost across all restarts
+(`full_history`) plus the index in that trace where each restart begins (`restart_indices`).
+Concatenated, these form the **sawtooth** the evolution chart renders — each restart descends from a
+fresh random tour, then jumps back up at the next restart — with the global minimum annotated. The
+chart is rendered **server-side** as a matplotlib PNG from the persisted run.
 
 ### Baselines (for benchmarking)
 - **Random route cost** — the cost of one random valid tour (seeded): the "no intelligence" baseline.
@@ -159,20 +174,23 @@ On `POST /optimize` the route layer:
 1. derives the full distance matrix from the map's grid (4-connected BFS) and maps each point id → its matrix index,
 2. orders the chosen stops as `[start] + others` and builds the `N×N` sub-matrix over those indices,
 3. runs `hill_climb` (start fixed at index `0`), computes both baselines,
-4. maps the resulting index tour back to point ids and appends the start to close the loop.
+4. maps the resulting index tour back to point ids and appends the start to close the loop,
+5. **persists the run** as a self-contained snapshot (stops, costs, sub-matrix, full search trace, and a
+   grid snapshot) to SQLite and returns its `run_id`; the route/evolution PNGs are rendered **on demand**
+   from that snapshot by the chart endpoints, so they survive even if the source map is later deleted.
 
 ## Architecture
 
 Two independently runnable deployables that talk over HTTP/JSON:
 
 ```
-┌────────────────────────┐        HTTP / JSON         ┌─────────────────────────────┐
-│  Frontend (Vite+React)  │ ─────────────────────────▶ │  Backend (FastAPI)           │
-│  • map picker / editor   │   GET/POST /maps, /optimize │  • api/   thin HTTP layer    │
-│  • SVG canvas + route    │ ◀───────────────────────── │  • routing/ pure TSP core ★  │
-│  • Recharts convergence  │     route, cost, history,   │  • maps/  grid, store, gen   │
-│  • results & comparison  │     baselines               │  • config settings           │
-└────────────────────────┘                            └─────────────────────────────┘
+┌────────────────────────────┐      HTTP / JSON       ┌────────────────────────────────┐
+│  Frontend (Vite + React)    │ ─────────────────────▶ │  Backend (FastAPI)              │
+│  • map picker + dialog       │  /maps /optimize /runs  │  • api/       thin HTTP layer   │
+│  • SVG canvas + route        │ ◀───────────────────── │  • routing/   pure TSP core ★   │
+│  • matrix + PNG charts       │   run_id, cost, matrix, │  • charts.py  matplotlib PNGs   │
+│  • results + run history     │   baselines, PNG bytes  │  • maps/ grid · runs/ sqlite    │
+└────────────────────────────┘                        └────────────────────────────────┘
                                                           ★ no I/O, deterministic, unit-tested
 ```
 
@@ -186,36 +204,43 @@ Two independently runnable deployables that talk over HTTP/JSON:
 rotaviva/
 ├── backend/
 │   ├── app/
-│   │   ├── config.py              # env-driven settings (guards, defaults, dirs)
+│   │   ├── config.py              # env-driven settings (guards, defaults, dirs, runs.db)
 │   │   ├── main.py                # FastAPI app factory + CORS
+│   │   ├── charts.py              # matplotlib route + evolution PNGs (OO API, thread-safe)
 │   │   ├── api/
-│   │   │   ├── schemas.py         # Pydantic request/response models
-│   │   │   └── routes.py          # 6 endpoints; id↔index mapping; error mapping
+│   │   │   ├── schemas.py         # Pydantic models (maps, optimize, runs)
+│   │   │   └── routes.py          # 11 endpoints; id↔index mapping; error mapping
 │   │   ├── routing/               # PURE core — no I/O, deterministic, unit-tested
 │   │   │   ├── tour.py            # Tour type + tour_cost()
-│   │   │   ├── hill_climbing.py   # 2-opt, local search, random restart, memory, history
+│   │   │   ├── hill_climbing.py   # 2-opt, local search, random restart, memory, full trace
 │   │   │   └── baselines.py       # random + guarded brute-force baselines
-│   │   └── maps/
-│   │       ├── grid.py            # grid model: BFS distances, matrix derivation, connectivity
-│   │       ├── store.py           # JSON store: presets (read-only) + user CRUD + grid validation
-│   │       ├── generate.py        # procedural city/warehouse grid layouts (seeded)
-│   │       └── presets/*.json     # bundled grids (centro, galpao-central)
-│   ├── tests/                     # 61 pytest tests over the core, grid, store, and API
-│   └── pyproject.toml             # uv project
+│   │   ├── maps/
+│   │   │   ├── grid.py            # grid model: BFS distances/paths, matrix derivation, connectivity
+│   │   │   ├── store.py           # JSON store: presets (read-only) + user CRUD + grid validation
+│   │   │   ├── generate.py        # procedural city/warehouse grid layouts (seeded)
+│   │   │   └── presets/*.json     # bundled grids (centro, galpao-central)
+│   │   └── runs/
+│   │       └── store.py           # SQLite store of optimization runs (self-contained snapshots)
+│   ├── tests/                     # 74 pytest tests: core, grid, charts, store, runs, API
+│   └── pyproject.toml             # uv project (FastAPI · pydantic · numpy · matplotlib)
 ├── frontend/
 │   ├── src/
-│   │   ├── types.ts               # shared TS types (mirror Pydantic schemas)
-│   │   ├── lib/api.ts             # typed fetch wrappers
+│   │   ├── types.ts               # shared TS types (maps, optimize, runs) mirroring Pydantic
+│   │   ├── lib/api.ts             # typed fetch wrappers + chart PNG URL helpers
 │   │   ├── lib/grid.ts            # cell-center + 4-connected BFS for drawing routes
+│   │   ├── lib/sprites.ts         # shared sprite emoji + labels
 │   │   ├── components/
-│   │   │   ├── MapCanvas.tsx       # SVG: themed grid (blocks/racks), click-to-select, street-following route
+│   │   │   ├── MapCanvas.tsx       # SVG grid, route, order badges, gold start, direction chevrons
+│   │   │   ├── MapLegend.tsx       # icon + marker-convention legend beside the canvas
 │   │   │   ├── StopList.tsx        # selected stops, designate start, remove
 │   │   │   ├── MapPicker.tsx       # choose / generate (style·size·density) / open-painter
 │   │   │   ├── GridPainter.tsx     # paint buildings/shelves, drop points; matrix derived
-│   │   │   ├── ResultsPanel.tsx    # route, cost, three-way comparison
-│   │   │   ├── ConvergenceChart.tsx# Recharts cost-per-restart
-│   │   │   └── ui/                 # shadcn/ui primitives
-│   │   └── App.tsx                # state owner + layout
+│   │   │   ├── ResultsPanel.tsx    # route, cost, comparison, cost matrix, PNG charts
+│   │   │   ├── CostMatrix.tsx      # color-scaled distance-matrix table
+│   │   │   ├── RunsList.tsx        # past-optimization history list
+│   │   │   ├── RunDetail.tsx       # read-only run detail (matrix + charts)
+│   │   │   └── ui/                 # shadcn/ui primitives (button, card, dialog, …)
+│   │   └── App.tsx                # state owner + layout (map, stops, result, runs, dialogs)
 │   └── package.json               # pnpm project (Vite + React + Tailwind v4)
 ├── docs/
 │   └── screenshots/               # the images used in this README
@@ -264,6 +289,7 @@ Open <http://localhost:5173>, pick **Centro**, click a few points, set a start, 
 |---|---|---|
 | `ROTAVIVA_PRESETS_DIR` | `app/maps/presets` | Read-only bundled maps |
 | `ROTAVIVA_DATA_DIR` | `backend/data/maps` | Where user-registered maps are written (gitignored) |
+| `ROTAVIVA_RUNS_DB` | `backend/data/runs.db` | SQLite database of optimization runs (gitignored) |
 | `ROTAVIVA_BRUTE_FORCE_GUARD` | `10` | Brute force is skipped when `N ≥ this` |
 | `ROTAVIVA_DEFAULT_RESTARTS` | `20` | Random-restart count when the request omits it |
 
@@ -281,7 +307,12 @@ Open <http://localhost:5173>, pick **Centro**, click a few points, set a start, 
 | `POST` | `/maps` | Register a painted map (style + grid + points; matrix derived) → `201` |
 | `DELETE` | `/maps/{id}` | Delete a user map (presets are read-only) → `204` |
 | `POST` | `/maps/generate` | Generate a city/warehouse grid (style·size·density·n·seed); optionally save |
-| `POST` | `/optimize` | Run the agent + baselines for a map/subset |
+| `POST` | `/optimize` | Run the agent + baselines for a map/subset; **persists a run** and returns its `run_id` + cost matrix |
+| `GET`  | `/runs` | List past optimization runs (newest first, summary form) |
+| `GET`  | `/runs/{id}` | Full run detail (tour, costs, baselines, cost matrix, params) |
+| `DELETE` | `/runs/{id}` | Delete a run → `204` |
+| `GET`  | `/runs/{id}/route.png` | Route chart (PNG) rendered from the run snapshot |
+| `GET`  | `/runs/{id}/evolution.png` | Cost-evolution chart (PNG) rendered from the run snapshot |
 
 **Example — optimize a route:**
 
@@ -293,13 +324,19 @@ curl -s -X POST http://localhost:8000/optimize \
 
 ```jsonc
 {
+  "run_id": 1,                               // persisted run; charts live at /runs/1/*.png
   "tour": ["a", "b", "d", "e", "c", "a"],   // ordered ids, closed loop
   "total_cost": 36.0,                        // whole street steps
-  "history": [36.0, 36.0, ...],             // best cost per restart
+  "matrix": [[0, 7, ...], ...],             // N×N sub-matrix for the chosen stops
+  "stop_order": ["a", "b", "c", "d", "e"],  // start first, then the rest
+  "stop_labels": ["Depósito", "Mercado", "Hospital", "Escola", "Casa"],
   "baselines": { "random_cost": 42.0, "brute_force_cost": 36.0 },
   "brute_force_skipped": false
 }
 ```
+
+The full search trace (the sawtooth) is not returned inline — it is stored with the run and rendered
+server-side at `GET /runs/{id}/evolution.png`.
 
 **Error semantics:** a point on a blocked cell, a disconnected grid (points walled off from each
 other), or a ragged/invalid grid → `422`; `start_id` not in `stop_ids` or fewer than 2 stops → `422`;
@@ -313,29 +350,35 @@ above the guard is **not** an error — it's skipped with `brute_force_skipped: 
 | Module | Responsibility | Key surface |
 |---|---|---|
 | `app/routing/tour.py` | Tour representation + cost of a closed cycle | `tour_cost(matrix, tour)` |
-| `app/routing/hill_climbing.py` | The agent: neighborhood, local search, restarts, memory, history | `two_opt_neighbors`, `random_tour`, `local_search`, `hill_climb` |
+| `app/routing/hill_climbing.py` | The agent: neighborhood, local search, restarts, memory; emits the full search trace | `two_opt_neighbors`, `random_tour`, `local_search`, `hill_climb` → `HillClimbResult(best_tour, best_cost, full_history, restart_indices)` |
 | `app/routing/baselines.py` | Benchmark baselines | `random_route_cost`, `brute_force_optimal` |
-| `app/maps/grid.py` | Grid model (pure): 4-connected BFS, distance-matrix derivation, connectivity, cell↔pixel | `parse_grid`, `bfs_distances`, `derive_matrix`, `validate_points`, `matrix_for_map`, `cell_center` |
+| `app/charts.py` | Server-side chart rendering (matplotlib OO API, thread-safe) → PNG bytes | `route_png`, `evolution_png` |
+| `app/maps/grid.py` | Grid model (pure): 4-connected BFS distances + shortest **paths**, matrix derivation, connectivity, cell↔pixel | `parse_grid`, `bfs_distances`, `bfs_path`, `derive_matrix`, `validate_points`, `matrix_for_map`, `cell_center` |
 | `app/maps/store.py` | The only filesystem module: load presets (read-only) + user CRUD; grid + connectivity validation; no stored matrix | `validate_map`, `list_maps`, `get_map`, `create_map`, `delete_map`, `MapError`+subclasses |
 | `app/maps/generate.py` | Procedural seeded city/warehouse grid layouts (always connected, n points on free cells) | `generate_map(map_id, name, n, *, style, size, density, seed)` |
-| `app/api/schemas.py` | Pydantic models (mirror `frontend/src/types.ts`): `Cell`, `GridModel`, `style`; points carry `cell` (no x/y/matrix) | `MapModel`, `GenerateRequest`, `OptimizeResponse`, … |
-| `app/api/routes.py` | Thin HTTP layer: validation, id↔index mapping, store-exception → HTTP code | the 6 endpoints |
-| `app/config.py` | Env-driven settings (no caching, so tests can redirect dirs) | `Settings`, `get_settings()` |
+| `app/runs/store.py` | SQLite persistence of optimization runs (self-contained snapshots) | `record_run`, `get_run`, `list_runs`, `delete_run`, `RunNotFound` |
+| `app/api/schemas.py` | Pydantic models (mirror `frontend/src/types.ts`); `OptimizeResponse` carries `run_id` + `matrix` (no `history`) | `MapModel`, `GenerateRequest`, `OptimizeResponse`, `RunSummary`, `RunDetail` |
+| `app/api/routes.py` | Thin HTTP layer: validation, id↔index mapping, run persistence, store/run-exception → HTTP code | the 11 endpoints |
+| `app/config.py` | Env-driven settings (no caching, so tests can redirect dirs/db) | `Settings`, `get_settings()` |
 
 ### Frontend
 
 | Module | Responsibility |
 |---|---|
-| `src/App.tsx` | Owns all state (maps, selected map, stops, start, result) and the layout; wires every component and the API |
-| `src/lib/api.ts` | Typed `fetch` wrappers for the six endpoints; extracts FastAPI error `detail` |
+| `src/App.tsx` | Owns all state (maps, selected map, stops, start, result, runs, dialogs) and the layout; wires every component and the API |
+| `src/lib/api.ts` | Typed `fetch` wrappers for the map/optimize/run endpoints + chart-PNG URL helpers; extracts FastAPI error `detail` |
 | `src/lib/grid.ts` | Pure helpers mirroring the backend grid contract: `cellCenter`, `isFree`, `bfsPath` (shortest cell path used to draw route legs) |
-| `src/types.ts` | Shared TypeScript types mirroring the backend Pydantic schemas (`Cell`, `GridModel`, `style`) |
-| `src/components/MapCanvas.tsx` | SVG canvas: themed grid (city blocks / warehouse racks), sprite points at cell centers, click-to-toggle stops, and the street-following route polyline traced via BFS, overlaid with `>` direction chevrons |
+| `src/lib/sprites.ts` | Shared sprite metadata: `SPRITE_EMOJI`, `SPRITE_LABELS`, `SPRITES` (used by canvas, painter, legend) |
+| `src/types.ts` | Shared TypeScript types mirroring the backend Pydantic schemas (`Cell`, `GridModel`, `style`, `OptimizeResponse`, `RunSummary`, `RunDetail`) |
+| `src/components/MapCanvas.tsx` | SVG canvas: themed grid, sprite points, click-to-toggle stops, the street-following route polyline (BFS) with `>` direction chevrons, **visiting-order badges**, and a **gold** start marker |
+| `src/components/MapLegend.tsx` | Legend beside the canvas: each map sprite + meaning, and the marker/route conventions |
 | `src/components/StopList.tsx` | Lists selected stops, radio to designate the start, remove button |
 | `src/components/MapPicker.tsx` | Dropdown of maps, delete (non-presets), grid generator (style·size·density·n·seed), open-painter button |
-| `src/components/GridPainter.tsx` | Paint buildings/shelves, drop points on free cells, pick a style; validates connectivity and posts a grid map (matrix derived server-side) |
-| `src/components/ResultsPanel.tsx` | Route sequence, total cost, agent/random/brute-force comparison, improvement % |
-| `src/components/ConvergenceChart.tsx` | Recharts step line of best-cost-per-restart |
+| `src/components/GridPainter.tsx` | Paint buildings/shelves, drop points on free cells, pick a style; validates connectivity and posts a grid map (matrix derived server-side); shown in a modal dialog |
+| `src/components/ResultsPanel.tsx` | Route sequence, total cost, agent/random/brute-force comparison, improvement %, the **cost matrix**, and the route + evolution **PNG charts** |
+| `src/components/CostMatrix.tsx` | Color-scaled HTML table of the stop-to-stop distance matrix |
+| `src/components/RunsList.tsx` | History of past optimizations (newest first); open or delete a run |
+| `src/components/RunDetail.tsx` | Read-only detail of a saved run (summary, cost matrix, route + evolution PNGs) |
 
 ## Testing
 
@@ -343,16 +386,18 @@ The pure `routing/` core is exhaustively unit-tested (deterministic via seed), p
 HTTP API:
 
 ```bash
-cd backend && uv run pytest        # 61 tests
+cd backend && uv run pytest        # 74 tests
 ```
 
 Coverage highlights: cost correctness (symmetric + asymmetric), 2-opt validity, local-search
 monotonicity, the circle instance whose optimum is the angular order, determinism under a seed,
-visited-state memory (no tour evaluated twice), brute force matching the known optimum + the guard
-refusing large N, edge cases (1/2/3 stops); **grid BFS distances that detour around walls**,
+visited-state memory (no tour evaluated twice), the **full search trace** (sawtooth + restart markers,
+`min(full_history) == best_cost`), brute force matching the known optimum + the guard refusing large N,
+edge cases (1/2/3 stops); **grid BFS distances + shortest paths that detour around walls**,
 **matrix derivation + connectivity rejection**, deterministic city/warehouse **generation**, the full
-map-store CRUD + grid validation, and every endpoint through FastAPI's `TestClient`. The frontend is
-exercised manually for v0.1.
+map-store CRUD + grid validation, the **run store** roundtrip/list/delete, **chart renderers** emitting
+valid PNG bytes, and every endpoint — including the run detail + chart endpoints — through FastAPI's
+`TestClient`. The frontend is exercised manually for v0.1.
 
 ## Roadmap (v0.2)
 
