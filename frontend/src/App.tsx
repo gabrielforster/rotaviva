@@ -9,7 +9,8 @@ import type {
   RunSummary,
 } from "@/types";
 import { MapPicker } from "@/components/MapPicker";
-import type { GenerateOpts } from "@/components/MapPicker";
+import { MapGenerator } from "@/components/MapGenerator";
+import type { GenerateOpts } from "@/components/MapGenerator";
 import { MapCanvas } from "@/components/MapCanvas";
 import { StopList } from "@/components/StopList";
 import { ResultsPanel } from "@/components/ResultsPanel";
@@ -32,6 +33,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [openRunId, setOpenRunId] = useState<number | null>(null);
+  const [createMode, setCreateMode] = useState<"generate" | "paint">("generate");
 
   const reloadMaps = () => api.listMaps().then(setMaps);
   const reloadRuns = () => api.listRuns().then(setRuns);
@@ -169,7 +171,6 @@ export default function App() {
                 maps={maps}
                 selectedId={map?.id ?? null}
                 onSelect={handleSelect}
-                onGenerate={handleGenerate}
                 onDelete={handleDelete}
                 onOpenEditor={() => setEditing(true)}
               />
@@ -240,7 +241,27 @@ export default function App() {
           <DialogHeader>
             <DialogTitle>Novo mapa</DialogTitle>
           </DialogHeader>
-          <GridPainter onCancel={() => setEditing(false)} onSave={saveMap} />
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant={createMode === "generate" ? "default" : "outline"}
+              onClick={() => setCreateMode("generate")}
+            >
+              Gerar
+            </Button>
+            <Button
+              size="sm"
+              variant={createMode === "paint" ? "default" : "outline"}
+              onClick={() => setCreateMode("paint")}
+            >
+              Pintar
+            </Button>
+          </div>
+          {createMode === "generate" ? (
+            <MapGenerator onGenerate={handleGenerate} />
+          ) : (
+            <GridPainter onCancel={() => setEditing(false)} onSave={saveMap} />
+          )}
         </DialogContent>
       </Dialog>
 
