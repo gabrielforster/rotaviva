@@ -68,7 +68,7 @@ in a fraction of the time, and the UI lets you *see* how close it gets.
 - **Street-following route** drawn on the grid, with `>` direction arrows along the path so the travel order is easy to read.
 - **Order badges & gold start** — after optimizing, each stop shows its visiting order and the start is marked gold.
 - **Icon legend** beside the map explaining each sprite and the marker conventions (start / selected / route / order).
-- **Cost matrix** for the selected stops, shown as a color-scaled table.
+- **Interactive cost matrix** for the selected stops (color-scaled table, shown above the benchmark comparison) — hovering a cell highlights that leg's street path and cost on the map.
 - **Persisted run history** — every optimization is saved to SQLite with an id; browse past runs and reopen any one (route + evolution charts + matrix) from the history panel.
 - **Unified "Novo mapa" dialog** — a single modal creates maps two ways via a **Gerar / Pintar** toggle: procedurally generate (style · size · density · points · seed) or hand-paint a grid. All generation inputs live inside the dialog, not the sidebar.
 - **Three map sources**: bundled **presets** (one city, one warehouse), **user-painted** maps, and
@@ -89,10 +89,17 @@ Click any point to add it as a stop.
 The agent's closed route drawn in green, **following the streets at right angles around the buildings**,
 with small `>` arrows marking the direction of travel and a **numbered badge** on each stop showing the
 visiting order (the **gold** marker is the start). The legend at the right explains the icons. Below the
-map: the route sequence, total cost, the agent-vs-random-vs-brute-force comparison, the **cost matrix**,
-and the two **server-rendered charts** (route + cost-evolution sawtooth).
+map: the route sequence and total cost, the **cost matrix**, the agent-vs-random-vs-brute-force
+comparison, and the two **server-rendered charts** (route + cost-evolution sawtooth).
 
 ![Optimized route with order badges, gold start, cost matrix, and route/evolution charts](docs/screenshots/02-optimized-route.png)
+
+### Interactive cost matrix
+Hover any cell of the cost matrix and the map highlights that A→B leg in orange — the **street path**
+plus a **cost badge** at its midpoint — while the optimized route dims behind it. The matrix sits
+directly under the route, above the benchmark comparison.
+
+![Hovering a cost-matrix cell highlights the street path and its cost on the map](docs/screenshots/05-cost-hover.png)
 
 ### Generated warehouse — where brute force gives up
 An auto-generated warehouse with 12 stops. Brute force is skipped ("ignorada"), but the agent still
@@ -374,14 +381,14 @@ above the guard is **not** an error — it's skipped with `brute_force_skipped: 
 | `src/lib/grid.ts` | Pure helpers mirroring the backend grid contract: `cellCenter`, `isFree`, `bfsPath` (shortest cell path used to draw route legs) |
 | `src/lib/sprites.ts` | Shared sprite metadata: `SPRITE_EMOJI`, `SPRITE_LABELS`, `SPRITES` (used by canvas, painter, legend) |
 | `src/types.ts` | Shared TypeScript types mirroring the backend Pydantic schemas (`Cell`, `GridModel`, `style`, `OptimizeResponse`, `RunSummary`, `RunDetail`) |
-| `src/components/MapCanvas.tsx` | SVG canvas: themed grid, sprite points, click-to-toggle stops, the street-following route polyline (BFS) with `>` direction chevrons, **visiting-order badges**, and a **gold** start marker |
+| `src/components/MapCanvas.tsx` | SVG canvas: themed grid, sprite points, click-to-toggle stops, the street-following route polyline (BFS) with `>` direction chevrons, **visiting-order badges**, a **gold** start marker, and the **hovered cost-matrix leg** (orange path + cost badge) |
 | `src/components/MapLegend.tsx` | Legend beside the canvas: each map sprite + meaning, and the marker/route conventions |
 | `src/components/StopList.tsx` | Lists selected stops, radio to designate the start, remove button |
 | `src/components/MapPicker.tsx` | Dropdown of maps, delete (non-presets), and the **Novo mapa** button that opens the creation dialog |
 | `src/components/MapGenerator.tsx` | Procedural-generation form (style · size · density · points · seed); lives inside the Novo mapa dialog (Gerar mode) |
 | `src/components/GridPainter.tsx` | Paint buildings/shelves, drop points on free cells, pick a style; validates connectivity and posts a grid map (matrix derived server-side); the Novo mapa dialog's Pintar mode |
 | `src/components/ResultsPanel.tsx` | Route sequence, total cost, agent/random/brute-force comparison, improvement %, the **cost matrix**, and the route + evolution **PNG charts** |
-| `src/components/CostMatrix.tsx` | Color-scaled HTML table of the stop-to-stop distance matrix |
+| `src/components/CostMatrix.tsx` | Color-scaled HTML table of the stop-to-stop distance matrix; emits hover events so the map can highlight that leg |
 | `src/components/RunsList.tsx` | History of past optimizations (newest first); open or delete a run |
 | `src/components/RunDetail.tsx` | Read-only detail of a saved run (summary, cost matrix, route + evolution PNGs) |
 
