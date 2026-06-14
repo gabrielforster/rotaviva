@@ -16,6 +16,11 @@ export function RunDetail({ id }: { id: number }) {
   if (error) return <p className="text-sm text-red-600">{error}</p>;
   if (!run) return <p className="text-sm text-muted-foreground">Carregando…</p>;
 
+  const labelOf = (id: string) => {
+    const i = run.stop_order.indexOf(id);
+    return i >= 0 ? run.stop_labels[i] : id;
+  };
+
   return (
     <div className="space-y-4">
       <div className="text-sm">
@@ -24,7 +29,7 @@ export function RunDetail({ id }: { id: number }) {
           <span className="font-mono">{run.total_cost.toFixed(2)}</span> ·{" "}
           {run.restarts} reinícios
         </p>
-        <p className="text-muted-foreground">{run.tour.join(" → ")}</p>
+        <p className="text-muted-foreground">{run.tour.map(labelOf).join(" → ")}</p>
       </div>
       <CostMatrix labels={run.stop_labels} matrix={run.matrix} />
       <img
