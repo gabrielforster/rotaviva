@@ -8,11 +8,18 @@ from __future__ import annotations
 
 from io import BytesIO
 
+import numpy as np
 from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.collections import LineCollection
+from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle
 
 from app.maps.grid import bfs_path, cell_center, parse_grid
+
+# Sequential green scale matching the on-screen route: medium green at the
+# start of the tour, dark green at the end — the color reads as direction.
+_GREEN_SCALE = LinearSegmentedColormap.from_list("rota", ["#34d399", "#166534"])
 
 
 def _to_png(fig: Figure) -> bytes:
@@ -52,8 +59,16 @@ def route_png(cells, cell_size, points, tour, total_cost) -> bytes:
             x, y = cell_center(grid, cell)
             xs.append(x)
             ys.append(y)
-    if xs:
-        ax.plot(xs, ys, color="#22c55e", linewidth=3, zorder=2)
+    if len(xs) >= 2:
+        # Draw the route as a green scale (light → dark) so color shows direction.
+        pts = np.array([xs, ys]).T.reshape(-1, 1, 2)
+        segs = np.concatenate([pts[:-1], pts[1:]], axis=1)
+        lc = LineCollection(
+            segs, cmap=_GREEN_SCALE, linewidth=3, zorder=2,
+            capstyle="round", joinstyle="round",
+        )
+        lc.set_array(np.linspace(0, 1, len(segs)))
+        ax.add_collection(lc)
 
     order = {pid: i + 1 for i, pid in enumerate(tour[:-1])}
     for p in points:
@@ -69,9 +84,9 @@ def route_png(cells, cell_size, points, tour, total_cost) -> bytes:
     ax.invert_yaxis()  # row 0 at the top, matching the on-screen canvas
     ax.set_aspect("equal")
     ax.set_title(f"Rota Otimizada (Custo: {total_cost:.0f})")
-    ax.set_xlabel("Eixo X")
-    ax.set_ylabel("Eixo Y")
-    ax.grid(True, alpha=0.3)
+    # Pixel coordinates carry no meaning, so drop the axis ticks/labels entirely.
+    ax.set_xticks([])
+    ax.set_yticks([])
     fig.tight_layout()
     return _to_png(fig)
 

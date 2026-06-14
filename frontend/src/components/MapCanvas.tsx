@@ -8,6 +8,10 @@ const THEME = {
   warehouse: { surface: "#efece5", block: "#b08968", blockStroke: "#8a6d52" },
 } as const;
 
+// Sequential green scale along the route: medium green at the start (t=0) →
+// dark green at the end (t=1), so the color itself reads as travel direction.
+const greenScale = (t: number) => `hsl(142 71% ${Math.round(60 - t * 32)}%)`;
+
 interface Props {
   map: MapModel;
   selected: Set<string>;
@@ -35,7 +39,10 @@ export function MapCanvas({ map, selected, startId, tour, onToggle, highlight }:
   // Trace the street path between consecutive stops into one polyline, and drop
   // direction chevrons along it so the travel direction is easy to follow.
   const route = useMemo(() => {
-    const empty = { line: "", arrows: [] as { x: number; y: number; angle: number }[] };
+    const empty = {
+      pts: [] as [number, number][],
+      arrows: [] as { x: number; y: number; angle: number }[],
+    };
     if (!tour || tour.length < 2) return empty;
     const pts: [number, number][] = [];
     for (let i = 0; i < tour.length - 1; i++) {
@@ -47,7 +54,6 @@ export function MapCanvas({ map, selected, startId, tour, onToggle, highlight }:
       const leg = i === 0 ? path : path.slice(1); // avoid duplicating shared endpoint
       for (const cell of leg) pts.push(cellCenter(grid, cell));
     }
-    const line = pts.map(([x, y]) => `${x},${y}`).join(" ");
     // One chevron every couple of cells, oriented along the local travel direction.
     const arrows: { x: number; y: number; angle: number }[] = [];
     const step = 2;
@@ -60,7 +66,7 @@ export function MapCanvas({ map, selected, startId, tour, onToggle, highlight }:
         angle: (Math.atan2(y1 - y0, x1 - x0) * 180) / Math.PI,
       });
     }
-    return { line, arrows };
+    return { pts, arrows };
   }, [tour, grid, byId]);
 
   // The street path + cost for the cost-matrix cell currently hovered.
@@ -111,16 +117,23 @@ export function MapCanvas({ map, selected, startId, tour, onToggle, highlight }:
 
       {/* The optimized route + chevrons, dimmed while a matrix cell is hovered. */}
       <g opacity={hi ? 0.2 : 1}>
-        {route.line && (
-          <polyline
-            points={route.line}
-            fill="none"
-            stroke="hsl(142 71% 45%)"
-            strokeWidth={4}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
-        )}
+        {/* Route drawn as a green scale: light at the start, dark at the end. */}
+        {route.pts.slice(0, -1).map(([x1, y1], i) => {
+          const [x2, y2] = route.pts[i + 1];
+          const t = route.pts.length > 2 ? i / (route.pts.length - 2) : 0;
+          return (
+            <line
+              key={i}
+              x1={x1}
+              y1={y1}
+              x2={x2}
+              y2={y2}
+              stroke={greenScale(t)}
+              strokeWidth={4}
+              strokeLinecap="round"
+            />
+          );
+        })}
         {/* Direction chevrons (">") pointing the way the route travels */}
         {route.arrows.map((a, i) => (
           <path

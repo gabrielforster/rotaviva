@@ -48,10 +48,13 @@ export function MapLegend({ map }: { map: MapModel }) {
           swatch={
             <span
               className="inline-block h-1 w-4 rounded"
-              style={{ background: "hsl(142 71% 45%)" }}
+              style={{
+                background:
+                  "linear-gradient(to right, hsl(142 71% 60%), hsl(142 71% 28%))",
+              }}
             />
           }
-          label="Rota otimizada"
+          label="Rota otimizada (início → fim)"
         />
         <Row
           swatch={
