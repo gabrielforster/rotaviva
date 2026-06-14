@@ -112,7 +112,8 @@ finds a route ~50% better than a random one — the core value of the heuristic.
 The **Novo mapa** dialog (opened from the sidebar button) creates a map two ways via a **Gerar / Pintar**
 toggle: *Gerar* procedurally builds a city/warehouse grid (style · size · density · points · seed), while
 *Pintar* (shown here) lets you **click and drag** to paint buildings/shelves and drop stops on the free
-cells (point icons are labeled in pt-BR). Either way the
+cells (point icons are labeled in pt-BR), and step back one edit at a time with **Desfazer** (undo).
+Either way the
 distance matrix is **derived from the layout** (4-connected shortest paths) — no hand-edited numbers. All
 generation inputs live inside this dialog.
 
@@ -387,7 +388,7 @@ above the guard is **not** an error — it's skipped with `brute_force_skipped: 
 | `src/components/StopList.tsx` | Lists selected stops, radio to designate the start, remove button |
 | `src/components/MapPicker.tsx` | Dropdown of maps, delete (non-presets), and the **Novo mapa** button that opens the creation dialog |
 | `src/components/MapGenerator.tsx` | Procedural-generation form (style · size · density · points · seed); lives inside the Novo mapa dialog (Gerar mode) |
-| `src/components/GridPainter.tsx` | Click-drag to paint buildings/shelves, drop points on free cells (icons labeled in pt-BR), pick a style; validates connectivity and posts a grid map (matrix derived server-side); the Novo mapa dialog's Pintar mode |
+| `src/components/GridPainter.tsx` | Click-drag to paint buildings/shelves, drop points on free cells (icons labeled in pt-BR), pick a style, step back edits with Desfazer (undo); validates connectivity and posts a grid map (matrix derived server-side); the Novo mapa dialog's Pintar mode |
 | `src/components/ResultsPanel.tsx` | Route sequence, total cost, agent/random/brute-force comparison, improvement %, the **cost matrix**, and the route + evolution **PNG charts** |
 | `src/components/CostMatrix.tsx` | Color-scaled HTML table of the stop-to-stop distance matrix; emits hover events so the map can highlight that leg |
 | `src/components/RunsList.tsx` | History of past optimizations (newest first); open or delete a run |
