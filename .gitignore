@@ -22,3 +22,7 @@ frontend/dist/
 
 # planning/spec working docs (local-only; purged from history later)
 docs/superpowers/
+
+# local design/handover docs (kept out of version control)
+HANDOVER.md
+design.md
