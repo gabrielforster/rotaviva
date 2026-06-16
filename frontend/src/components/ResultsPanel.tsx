@@ -98,6 +98,11 @@ export function ResultsPanel({ map, result, onHover }: Props) {
             className="w-full rounded-md border"
           />
           <img
+            src={api.routeCostsChartUrl(result.run_id)}
+            alt="Custos por trecho"
+            className="w-full rounded-md border"
+          />
+          <img
             src={api.evolutionChartUrl(result.run_id)}
             alt="Evolução do custo"
             className="w-full rounded-md border"

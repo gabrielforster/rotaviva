@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response
 
-from app.charts import evolution_png, route_png
+from app.charts import evolution_png, route_costs_png, route_png
 from app.config import get_settings
 from app.maps import generate as gen
 from app.maps import store
@@ -219,6 +219,20 @@ def run_route_png(run_id: int) -> Response:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     g = r["grid_snapshot"]
     png = route_png(g["cells"], g["cell_size"], g["points"], r["tour"], r["total_cost"])
+    return Response(content=png, media_type="image/png")
+
+
+@router.get("/runs/{run_id}/route_costs.png")
+def run_route_costs_png(run_id: int) -> Response:
+    try:
+        r = runs_store.get_run(run_id)
+    except runs_store.RunNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    g = r["grid_snapshot"]
+    png = route_costs_png(
+        g["cells"], g["cell_size"], g["points"], r["tour"], r["total_cost"],
+        r["matrix"], r["stop_order"],
+    )
     return Response(content=png, media_type="image/png")
 
 

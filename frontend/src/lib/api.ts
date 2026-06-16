@@ -46,5 +46,6 @@ export const api = {
   deleteRun: (id: number) =>
     request<void>(`/runs/${id}`, { method: "DELETE" }),
   routeChartUrl: (id: number) => `${BASE}/runs/${id}/route.png`,
+  routeCostsChartUrl: (id: number) => `${BASE}/runs/${id}/route_costs.png`,
   evolutionChartUrl: (id: number) => `${BASE}/runs/${id}/evolution.png`,
 };

@@ -75,6 +75,11 @@ export function RunDetail({ id }: { id: number }) {
         className="w-full rounded-md border"
       />
       <img
+        src={api.routeCostsChartUrl(run.id)}
+        alt="Custos por trecho"
+        className="w-full rounded-md border"
+      />
+      <img
         src={api.evolutionChartUrl(run.id)}
         alt="Evolução do custo"
         className="w-full rounded-md border"

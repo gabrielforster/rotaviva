@@ -188,8 +188,9 @@ On `POST /optimize` the route layer:
 3. runs `hill_climb` (start fixed at index `0`), computes both baselines,
 4. maps the resulting index tour back to point ids and appends the start to close the loop,
 5. **persists the run** as a self-contained snapshot (stops, costs, sub-matrix, full search trace, and a
-   grid snapshot) to SQLite and returns its `run_id`; the route/evolution PNGs are rendered **on demand**
-   from that snapshot by the chart endpoints, so they survive even if the source map is later deleted.
+   grid snapshot) to SQLite and returns its `run_id`; the route, edge-cost, and evolution PNGs are
+   rendered **on demand** from that snapshot by the chart endpoints, so they survive even if the source
+   map is later deleted.
 
 ## Architecture
 
@@ -218,10 +219,10 @@ rotaviva/
 │   ├── app/
 │   │   ├── config.py              # env-driven settings (guards, defaults, dirs, runs.db)
 │   │   ├── main.py                # FastAPI app factory + CORS
-│   │   ├── charts.py              # matplotlib route + evolution PNGs (OO API, thread-safe)
+│   │   ├── charts.py              # matplotlib route + edge-cost + evolution PNGs (OO API, thread-safe)
 │   │   ├── api/
 │   │   │   ├── schemas.py         # Pydantic models (maps, optimize, runs)
-│   │   │   └── routes.py          # 11 endpoints; id↔index mapping; error mapping
+│   │   │   └── routes.py          # 12 endpoints; id↔index mapping; error mapping
 │   │   ├── routing/               # PURE core — no I/O, deterministic, unit-tested
 │   │   │   ├── tour.py            # Tour type + tour_cost()
 │   │   │   ├── hill_climbing.py   # 2-opt, local search, random restart, memory, full trace
@@ -325,6 +326,7 @@ Open <http://localhost:5173>, pick **Centro**, click a few points, set a start, 
 | `GET`  | `/runs/{id}` | Full run detail (tour, costs, baselines, cost matrix, params) + a self-contained **map snapshot** (the run's stops) for the detail map view |
 | `DELETE` | `/runs/{id}` | Delete a run → `204` |
 | `GET`  | `/runs/{id}/route.png` | Route chart (PNG) rendered from the run snapshot |
+| `GET`  | `/runs/{id}/route_costs.png` | Clean node-and-edge graph (no walls) with each leg's cost labeled on its edge (PNG) |
 | `GET`  | `/runs/{id}/evolution.png` | Cost-evolution chart (PNG) rendered from the run snapshot |
 
 **Example — optimize a route:**
@@ -365,13 +367,13 @@ above the guard is **not** an error — it's skipped with `brute_force_skipped: 
 | `app/routing/tour.py` | Tour representation + cost of a closed cycle | `tour_cost(matrix, tour)` |
 | `app/routing/hill_climbing.py` | The agent: neighborhood, local search, restarts, memory; emits the full search trace | `two_opt_neighbors`, `random_tour`, `local_search`, `hill_climb` → `HillClimbResult(best_tour, best_cost, full_history, restart_indices)` |
 | `app/routing/baselines.py` | Benchmark baselines | `random_route_cost`, `brute_force_optimal` |
-| `app/charts.py` | Server-side chart rendering (matplotlib OO API, thread-safe) → PNG bytes | `route_png`, `evolution_png` |
+| `app/charts.py` | Server-side chart rendering (matplotlib OO API, thread-safe) → PNG bytes | `route_png`, `route_costs_png`, `evolution_png` |
 | `app/maps/grid.py` | Grid model (pure): 4-connected BFS distances + shortest **paths**, matrix derivation, connectivity, cell↔pixel | `parse_grid`, `bfs_distances`, `bfs_path`, `derive_matrix`, `validate_points`, `matrix_for_map`, `cell_center` |
 | `app/maps/store.py` | The only filesystem module: load presets (read-only) + user CRUD; grid + connectivity validation; no stored matrix | `validate_map`, `list_maps`, `get_map`, `create_map`, `delete_map`, `MapError`+subclasses |
 | `app/maps/generate.py` | Procedural seeded city/warehouse grid layouts (always connected, n points on free cells) | `generate_map(map_id, name, n, *, style, size, density, seed)` |
 | `app/runs/store.py` | SQLite persistence of optimization runs (self-contained snapshots) | `record_run`, `get_run`, `list_runs`, `delete_run`, `RunNotFound` |
 | `app/api/schemas.py` | Pydantic models (mirror `frontend/src/types.ts`); `OptimizeResponse` carries `run_id` + `matrix` (no `history`) | `MapModel`, `GenerateRequest`, `OptimizeResponse`, `RunSummary`, `RunDetail` |
-| `app/api/routes.py` | Thin HTTP layer: validation, id↔index mapping, run persistence, store/run-exception → HTTP code | the 11 endpoints |
+| `app/api/routes.py` | Thin HTTP layer: validation, id↔index mapping, run persistence, store/run-exception → HTTP code | the 12 endpoints |
 | `app/config.py` | Env-driven settings (no caching, so tests can redirect dirs/db) | `Settings`, `get_settings()` |
 
 ### Frontend
@@ -389,10 +391,10 @@ above the guard is **not** an error — it's skipped with `brute_force_skipped: 
 | `src/components/MapPicker.tsx` | Dropdown of maps, delete (non-presets), and the **Novo mapa** button that opens the creation dialog |
 | `src/components/MapGenerator.tsx` | Procedural-generation form (style · size · density · points · seed); lives inside the Novo mapa dialog (Gerar mode) |
 | `src/components/GridPainter.tsx` | Click-drag to paint buildings/shelves, drop points on free cells (icons labeled in pt-BR), pick a style, step back edits with Desfazer (undo); validates connectivity and posts a grid map (matrix derived server-side); the Novo mapa dialog's Pintar mode |
-| `src/components/ResultsPanel.tsx` | Route sequence, total cost, agent/random/brute-force comparison, improvement %, the **cost matrix**, and the route + evolution **PNG charts** |
+| `src/components/ResultsPanel.tsx` | Route sequence, total cost, agent/random/brute-force comparison, improvement %, the **cost matrix**, and the route + edge-cost + evolution **PNG charts** |
 | `src/components/CostMatrix.tsx` | Color-scaled HTML table of the stop-to-stop distance matrix; emits hover events so the map can highlight that leg |
 | `src/components/RunsList.tsx` | History of past optimizations (newest first); open or delete a run |
-| `src/components/RunDetail.tsx` | Read-only detail of a saved run: interactive **map view** (route, badges, gold start, and the same cost-matrix hover highlight) first, then summary, cost matrix, and route + evolution PNGs |
+| `src/components/RunDetail.tsx` | Read-only detail of a saved run: interactive **map view** (route, badges, gold start, and the same cost-matrix hover highlight) first, then summary, cost matrix, and route + edge-cost + evolution PNGs |
 
 ## Testing
 
