@@ -14,7 +14,7 @@ the grid is in-app data, so the focus stays on the AI/optimization logic.
 > v0.1 — a modern web rebuild of the original RotaViva concept (a ~200-line Python/NetworkX/Matplotlib
 > script), preserving the AI intent: local search over a city graph, measured against baselines.
 
-![Optimized route with order badges and gold start, the cost matrix, and server-rendered route + evolution charts](docs/screenshots/02-optimized-route.png)
+![Optimized route with order badges and gold start, the cost matrix, and server-rendered route, edge-cost, and evolution charts](docs/screenshots/02-optimized-route.png)
 
 ---
 
@@ -48,8 +48,9 @@ the grid is in-app data, so the focus stays on the AI/optimization logic.
    - a **three-way comparison**: agent vs. a random route vs. the **brute-force optimum**
      (computed only for small instances, `N < 10`),
    - the **cost matrix** for the chosen stops,
-   - two **server-rendered charts** (matplotlib PNGs): the **route** following the streets and the full
-     **cost-evolution sawtooth** across all restarts.
+   - three **server-rendered charts** (matplotlib PNGs): the **route** following the streets, a
+     **per-leg edge-cost graph** (a clean node-and-edge plot with each leg's cost printed on its edge),
+     and the full **cost-evolution sawtooth** across all restarts.
 5. Every optimization is **persisted** (SQLite) with a generated `run_id`, so past runs can be **listed
    and reopened** from the history panel.
 
@@ -64,18 +65,18 @@ in a fraction of the time, and the UI lets you *see* how close it gets.
 - **Goal-based agent**: Hill Climbing + Random Restart over a 2-opt neighborhood, deterministic under a seed.
 - **Visited-state memory** ("memória de estados") — identical tours are never re-evaluated within a run.
 - **Three-way benchmark**: agent route vs. random route vs. exact brute force (guarded to `N < 10`).
-- **Server-rendered charts** (matplotlib PNGs): the **route** along the streets (same green scale, with the meaningless pixel axes removed) and the full **cost-evolution sawtooth** with restart markers and the global-minimum annotation.
+- **Server-rendered charts** (matplotlib PNGs): the **route** along the streets (same green scale, with the meaningless pixel axes removed), a **per-leg edge-cost graph** (a clean node-and-edge plot — no walls — with each leg's cost printed on its edge), and the full **cost-evolution sawtooth** with restart markers and the global-minimum annotation.
 - **Street-following route** drawn as a **green scale** (light at the start → dark at the end) with `>` direction arrows along the path, so travel direction is easy to read.
 - **Order badges & gold start** — after optimizing, each stop shows its visiting order and the start is marked gold.
 - **Icon legend** beside the map explaining each sprite and the marker conventions (start / selected / route / order).
 - **Interactive cost matrix** for the selected stops (color-scaled table, shown above the benchmark comparison) — hovering a cell highlights that leg's street path and cost on the map.
-- **Persisted run history** — every optimization is saved to SQLite with an id; browse past runs and reopen any one (route + evolution charts + matrix) from the history panel.
+- **Persisted run history** — every optimization is saved to SQLite with an id; browse past runs and reopen any one (route + edge-cost + evolution charts + matrix) from the history panel.
 - **Unified "Novo mapa" dialog** — a single modal creates maps two ways via a **Gerar / Pintar** toggle: procedurally generate (style · size · density · points · seed) or hand-paint a grid. All generation inputs live inside the dialog, not the sidebar.
 - **Three map sources**: bundled **presets** (one city, one warehouse), **user-painted** maps, and
   **auto-generated** city/warehouse grids (style + size + density + seed).
 - **Built-in grid painter** — paint buildings/shelves, drop points on free cells, pick a style; the
   distance matrix is **derived from the layout** (4-connected shortest paths).
-- Clean separation: a **pure, fully unit-tested** algorithm core (74 backend tests) behind a thin HTTP API.
+- Clean separation: a **pure, fully unit-tested** algorithm core (75 backend tests) behind a thin HTTP API.
 
 ## Screenshots
 
@@ -90,9 +91,17 @@ The agent's closed route drawn as a **green scale** (light start → dark end), 
 with small `>` arrows marking the direction of travel and a **numbered badge** on each stop showing the
 visiting order (the **gold** marker is the start). The legend at the right explains the icons. Below the
 map: the route sequence and total cost, the **cost matrix**, the agent-vs-random-vs-brute-force
-comparison, and the two **server-rendered charts** (route + cost-evolution sawtooth).
+comparison, and the three **server-rendered charts** (route, edge-cost graph, cost-evolution sawtooth).
 
-![Optimized route with order badges, gold start, cost matrix, and route/evolution charts](docs/screenshots/02-optimized-route.png)
+![Optimized route with order badges, gold start, cost matrix, and route/edge-cost/evolution charts](docs/screenshots/02-optimized-route.png)
+
+### Edge-cost chart — cost per leg
+A companion to the route chart, rendered like the original concept plot: a clean **node-and-edge graph**
+with **no buildings**, straight lines connecting the stops in tour order (green scale, light start → dark
+end = direction) and the **cost of each leg printed on its edge**. The per-leg labels sum to the tour's
+total cost shown in the title. Served at `GET /runs/{id}/route_costs.png`.
+
+![The edge-cost chart: a clean node-and-edge graph with each leg's cost labeled on its edge](docs/screenshots/06-edge-costs.png)
 
 ### Interactive cost matrix
 Hover any cell of the cost matrix and the map highlights that A→B leg in orange — the **street path**
@@ -234,7 +243,7 @@ rotaviva/
 │   │   │   └── presets/*.json     # bundled grids (centro, galpao-central)
 │   │   └── runs/
 │   │       └── store.py           # SQLite store of optimization runs (self-contained snapshots)
-│   ├── tests/                     # 74 pytest tests: core, grid, charts, store, runs, API
+│   ├── tests/                     # 75 pytest tests: core, grid, charts, store, runs, API
 │   └── pyproject.toml             # uv project (FastAPI · pydantic · numpy · matplotlib)
 ├── frontend/
 │   ├── src/
@@ -402,7 +411,7 @@ The pure `routing/` core is exhaustively unit-tested (deterministic via seed), p
 HTTP API:
 
 ```bash
-cd backend && uv run pytest        # 74 tests
+cd backend && uv run pytest        # 75 tests
 ```
 
 Coverage highlights: cost correctness (symmetric + asymmetric), 2-opt validity, local-search
